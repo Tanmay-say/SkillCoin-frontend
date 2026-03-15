@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: Typecheck & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: cd apps/api && npx prisma generate
+
+      - name: Typecheck API
+        run: cd apps/api && pnpm lint
+
+      - name: Typecheck CLI
+        run: cd packages/cli && pnpm lint
+
+      - name: Build API
+        run: cd apps/api && pnpm build
+
+      - name: Build CLI
+        run: cd packages/cli && pnpm build

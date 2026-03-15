@@ -1,0 +1,63 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+/node_modules
+
+# Environment - match all depths
+.env
+.env.local
+.env.*.local
+*/.env
+*/.env.local
+*/.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Build outputs
+dist/
+.next/
+out/
+build/
+# FE-01: Explicit nested .next patterns
+apps/web/.next/
+apps/**/.next/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Turbo
+.turbo/
+
+# Prisma
+apps/api/src/db/migrations/
+
+# Debug
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+
+# Docker
+docker-compose.override.yml
+
+# PRD files
+*.pdf
+*.docx
+prd_text.txt
+
+# Local uploads (Lighthouse fallback)
+uploads/
+apps/api/uploads/
+
+# Temp scripts
+create-sample-skill.cjs
+

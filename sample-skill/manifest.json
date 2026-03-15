@@ -1,0 +1,17 @@
+{
+  "name": "seo-writer",
+  "version": "1.0.0",
+  "description": "Generates 700-word SEO-optimized blog posts with keyword analysis, LSI keyword research, and proper heading structure.",
+  "entry": "SKILL.md",
+  "author": "skillcoin-team",
+  "license": "per-user",
+  "price": {
+    "amount": 0.5,
+    "currency": "USDC"
+  },
+  "category": "marketing",
+  "tags": ["seo", "content", "blog", "writing"],
+  "encrypted": false,
+  "agentCompatibility": ["claude", "cursor", "copilot"],
+  "skillcoinVersion": "1"
+}

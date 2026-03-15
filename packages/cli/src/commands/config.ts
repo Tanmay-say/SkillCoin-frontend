@@ -1,0 +1,71 @@
+import { Command } from "commander";
+import chalk from "chalk";
+import { readConfig, writeConfig } from "../lib/config";
+
+export function configCommand(program: Command) {
+  program
+    .command("config")
+    .description("Configure Skillcoin CLI settings")
+    .option("-w, --wallet <address>", "Set wallet address")
+    .option("-k, --key <privateKey>", "Set private key for payments")
+    .option("-a, --api <url>", "Set API base URL")
+    .option("-g, --gateway <url>", "Set IPFS gateway URL")
+    .option("-n, --network <network>", "Set network (calibration | mainnet)")
+    .action(async (options: any) => {
+      console.log();
+      console.log(chalk.bold.cyan("  ⚙️  Skillcoin Config"));
+      console.log(chalk.dim("  ─────────────────────────"));
+      console.log();
+
+      const hasUpdates =
+        options.wallet || options.key || options.api || options.gateway || options.network;
+
+      if (hasUpdates) {
+        const updates: Record<string, string> = {};
+        if (options.wallet) updates.wallet = options.wallet;
+        if (options.key) updates.privateKey = options.key;
+        if (options.api) updates.apiBase = options.api;
+        if (options.gateway) updates.ipfsGateway = options.gateway;
+        if (options.network) updates.network = options.network;
+
+        const config = writeConfig(updates);
+        console.log(chalk.green("  ✓ Configuration updated"));
+        console.log();
+        displayConfig(config);
+      } else {
+        // Show current config
+        const config = readConfig();
+        displayConfig(config);
+      }
+    });
+}
+
+function displayConfig(config: any) {
+  const mask = (val: string) => {
+    if (!val) return chalk.dim("(not set)");
+    if (val.startsWith("0x") && val.length > 16) {
+      return val.substring(0, 8) + "..." + val.substring(val.length - 6);
+    }
+    return val;
+  };
+
+  console.log(
+    `  ${chalk.dim("Wallet:")}       ${config.wallet ? chalk.cyan(mask(config.wallet)) : chalk.dim("(not set)")}`
+  );
+  console.log(
+    `  ${chalk.dim("Private Key:")}  ${config.privateKey ? chalk.yellow("••••••" + config.privateKey.slice(-4)) : chalk.dim("(not set)")}`
+  );
+  console.log(
+    `  ${chalk.dim("API Base:")}     ${chalk.white(config.apiBase)}`
+  );
+  console.log(
+    `  ${chalk.dim("IPFS Gateway:")} ${chalk.white(config.ipfsGateway)}`
+  );
+  console.log(
+    `  ${chalk.dim("Skills Dir:")}   ${chalk.white(config.skillsDir)}`
+  );
+  console.log(
+    `  ${chalk.dim("Network:")}      ${chalk.white(config.network)}`
+  );
+  console.log();
+}

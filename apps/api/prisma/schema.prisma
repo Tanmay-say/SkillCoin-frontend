@@ -1,0 +1,75 @@
+// Prisma Schema for Skillcoin
+// Database: Supabase PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Skill {
+  id             String    @id @default(uuid())
+  name           String    @unique
+  slug           String    @unique
+  description    String
+  version        String    @default("1.0.0")
+  category       String?
+  tags           String[]
+  zipCid         String
+  manifestCid    String?
+  filecoinDealId String?
+  creatorAddress String
+  priceAmount    Decimal   @default(0.5)
+  priceCurrency  String    @default("USDC")
+  encrypted      Boolean   @default(false)
+  published      Boolean   @default(false)
+  downloads      Int       @default(0)
+  fvmContractId  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  purchases      Purchase[]
+
+  @@index([category])
+  @@index([creatorAddress])
+  @@index([published])
+}
+
+model User {
+  id            String     @id @default(uuid())
+  walletAddress String     @unique
+  displayName   String?
+  email         String?
+  bio           String?
+  avatarUrl     String?
+  isCreator     Boolean    @default(false)
+  totalRevenue  Decimal    @default(0)
+  createdAt     DateTime   @default(now())
+  purchases     Purchase[]
+
+  @@index([walletAddress])
+}
+
+model Purchase {
+  id            String    @id @default(uuid())
+  userId        String
+  skillId       String
+  amount        Decimal
+  currency      String
+  paymentMethod String
+  txHash        String?
+  licenseNftId  String?
+  downloadToken String?
+  tokenExpires  DateTime?
+  installedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id])
+  skill         Skill     @relation(fields: [skillId], references: [id])
+
+  @@unique([txHash])
+  @@index([userId])
+  @@index([skillId])
+}
