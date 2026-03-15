@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { LighthouseService } from "../services/lighthouse";
+import { FilecoinStorageService } from "../services/filecoin-storage";
 import { SynapseService } from "../services/synapse";
 import { SkillService } from "../services/skill";
 import { UploadMetadataSchema } from "../types";
@@ -108,13 +108,13 @@ upload.post("/", async (c) => {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Upload the .md file to Lighthouse / IPFS
-    const uploadResult = await LighthouseService.uploadFile(
+    // Upload the .md file to Filecoin via Synapse SDK
+    const uploadResult = await FilecoinStorageService.uploadFile(
       buffer,
       file.name
     );
 
-    // Create Filecoin storage deal via Synapse
+    // Create Filecoin storage deal record (kept for compatibility, skip if Synapse unavailable)
     const deal = await SynapseService.createStorageDeal(uploadResult.cid);
 
     // Create skill record in database
@@ -125,8 +125,12 @@ upload.post("/", async (c) => {
       version: metadata.version,
       category: metadata.category,
       tags: metadata.tags,
-      zipCid: uploadResult.cid,  // Reusing field for the file CID
-      filecoinDealId: deal.dealId,
+      zipCid: uploadResult.cid,
+      filecoinDealId: uploadResult.filecoinDatasetId
+        ? `dataset-${uploadResult.filecoinDatasetId}`
+        : deal.dealId,
+      pieceCid: uploadResult.pieceCid || undefined,
+      filecoinDatasetId: uploadResult.filecoinDatasetId || undefined,
       creatorAddress,
       priceAmount: metadata.price,
       priceCurrency: metadata.currency,
@@ -137,10 +141,17 @@ upload.post("/", async (c) => {
       data: {
         skillId: skill.id,
         cid: uploadResult.cid,
-        dealId: deal.dealId,
+        pieceCid: uploadResult.pieceCid || null,
+        filecoinDatasetId: uploadResult.filecoinDatasetId || null,
+        dealId: skill.filecoinDealId,
         status: "uploaded",
         gatewayUrl: uploadResult.gatewayUrl,
-        explorerUrl: deal.explorerUrl,
+        explorerUrl: uploadResult.filecoinDatasetId
+          ? `https://pdp.vxb.ai/calibration/dataset/${uploadResult.filecoinDatasetId}`
+          : deal.explorerUrl,
+        proofBadge: uploadResult.filecoinDatasetId
+          ? { dataSetId: uploadResult.filecoinDatasetId, verified: true }
+          : null,
         marketplaceUrl: `/skills/${slug}`,
       },
     });

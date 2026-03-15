@@ -12,6 +12,7 @@ import skillsRouter from "./routes/skills";
 import uploadRouter from "./routes/upload";
 import downloadRouter from "./routes/download";
 import authRouter from "./routes/auth";
+import generateRouter from "./routes/generate";
 import { optionalAuth } from "./middleware/auth";
 import { uploadRateLimit, downloadRateLimit } from "./middleware/rateLimit";
 
@@ -49,13 +50,18 @@ app.use("*", optionalAuth());
 app.get("/", (c) => {
   return c.json({
     name: "Skillcoin API",
-    version: "1.0.0",
+    version: "2.0.0",
     tagline: "npm for AI Agent Skills — Decentralized, Paid, Permanent",
     status: "running",
+    storage: "Filecoin Pin + Synapse SDK (PDP proofs)",
+    ai: "Gemini 2.0 Flash (skill generation)",
     endpoints: {
       skills: "/api/skills",
       upload: "/api/skills/upload",
       download: "/api/skills/:slug/download",
+      generate: "/api/skills/generate",
+      modifySkill: "/api/skills/generate/modify",
+      verify: "/api/skills/:slug/verify",
       auth: "/api/auth",
     },
   });
@@ -93,9 +99,12 @@ app.get("/uploads/:filename", async (c) => {
 
 // ─── Routes ────────────────────────────────────────────────
 
-// BUG-01 FIX: Upload route registered FIRST to avoid /:slug conflict
+// Upload route registered FIRST to avoid /:slug conflict
 app.use("/api/skills/upload", uploadRateLimit);
 app.route("/api/skills/upload", uploadRouter);
+
+// AI Skill Generation (Gemini)
+app.route("/api/skills/generate", generateRouter);
 
 // Download with rate limiting
 app.use("/api/skills/:slug/download", downloadRateLimit);
@@ -104,8 +113,7 @@ app.route("/api/skills", downloadRouter);
 // Skills CRUD (generic /:slug comes last)
 app.route("/api/skills", skillsRouter);
 
-// Auth — mounted ONLY at /api/auth
-// BUG-02 FIX: Removed duplicate `app.route("/api", authRouter)` that created hidden endpoints
+// Auth
 app.route("/api/auth", authRouter);
 
 // ─── 404 handler ───────────────────────────────────────────

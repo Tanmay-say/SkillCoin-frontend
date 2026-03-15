@@ -25,6 +25,8 @@ export class SkillService {
     zipCid: string;
     manifestCid?: string;
     filecoinDealId?: string;
+    pieceCid?: string;
+    filecoinDatasetId?: number;
     creatorAddress: string;
     priceAmount?: number;
     priceCurrency?: string;
@@ -50,10 +52,12 @@ export class SkillService {
         zipCid: data.zipCid,
         manifestCid: data.manifestCid,
         filecoinDealId: data.filecoinDealId,
+        pieceCid: data.pieceCid,
+        filecoinDatasetId: data.filecoinDatasetId,
         creatorAddress: data.creatorAddress,
         priceAmount: data.priceAmount ?? 0.5,
         priceCurrency: data.priceCurrency || "USDC",
-        published: true, // Auto-publish on upload
+        published: true,
       },
     });
   }

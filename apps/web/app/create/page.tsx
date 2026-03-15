@@ -4,7 +4,11 @@ import { useState } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { uploadSkill } from "@/lib/api";
-import { Upload, CheckCircle, Loader2, AlertCircle, FileText, X, ExternalLink } from "lucide-react";
+import FilecoinProofBadge from "@/components/FilecoinProofBadge";
+import {
+  Upload, CheckCircle, Loader2, AlertCircle,
+  FileText, X, ExternalLink, Sparkles, Wand2, ChevronDown, ChevronUp,
+} from "lucide-react";
 
 type Step = "form" | "uploading" | "success" | "error";
 
@@ -15,6 +19,14 @@ export default function CreatePage() {
   const [uploadProgress, setUploadProgress] = useState("");
   const [result, setResult] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState("");
+
+  // AI generation state
+  const [aiDescription, setAiDescription] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiPreview, setAiPreview] = useState("");
+  const [aiName, setAiName] = useState("");
+  const [aiExpanded, setAiExpanded] = useState(false);
+  const [aiError, setAiError] = useState("");
 
   const [form, setForm] = useState({
     name: "",
@@ -54,7 +66,7 @@ export default function CreatePage() {
     if (!file) return;
 
     setStep("uploading");
-    setUploadProgress("Uploading skill to IPFS via Lighthouse...");
+    setUploadProgress("Uploading skill to Filecoin via Synapse SDK...");
 
     try {
       const formData = new FormData();
@@ -76,7 +88,7 @@ export default function CreatePage() {
         })
       );
 
-      setUploadProgress("Storing permanently on Filecoin...");
+      setUploadProgress("Storing permanently on Filecoin with PDP proofs...");
 
       const data = await uploadSkill(formData);
 
@@ -84,6 +96,8 @@ export default function CreatePage() {
       setResult({
         skillId: data.skillId,
         cid: data.cid,
+        pieceCid: data.pieceCid,
+        filecoinDatasetId: data.filecoinDatasetId,
         dealId: data.dealId,
         gatewayUrl: data.gatewayUrl,
         explorerUrl: data.explorerUrl,
@@ -94,24 +108,57 @@ export default function CreatePage() {
     } catch (error: any) {
       const respData = error?.response?.data;
       let msg = "";
-
       if (respData?.details?.fieldErrors) {
-        const fieldErrors = respData.details.fieldErrors;
-        const lines = Object.entries(fieldErrors)
-          .map(([field, errors]) => `${field}: ${(errors as string[]).join(", ")}`)
+        msg = Object.entries(respData.details.fieldErrors)
+          .map(([f, errs]) => `${f}: ${(errs as string[]).join(", ")}`)
           .join("\n");
-        msg = lines || respData.error || "Validation failed";
-      } else if (respData?.details?.formErrors?.length) {
-        msg = respData.details.formErrors.join(", ");
       } else if (respData?.error) {
         msg = respData.error;
       } else {
         msg = error?.message || "Upload failed. Check the API is running on localhost:3001.";
       }
-
       setErrorMsg(msg);
       setStep("error");
     }
+  };
+
+  // ─── AI Generation Handler ────────────────────────────────────────────────
+  const handleAiGenerate = async () => {
+    if (!aiDescription.trim() || aiDescription.length < 10) return;
+    setAiGenerating(true);
+    setAiError("");
+    setAiPreview("");
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+      const res = await fetch(`${apiUrl}/api/skills/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: aiDescription, category: form.category }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Generation failed");
+      setAiPreview(data.data.skillMd);
+      setAiName(data.data.name);
+    } catch (err: any) {
+      setAiError(err.message);
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handleUseGeneratedSkill = () => {
+    if (!aiPreview) return;
+    // Create a File object from the generated content
+    const blob = new Blob([aiPreview], { type: "text/markdown" });
+    const generatedFile = new File([blob], `${aiName || "generated-skill"}.md`, {
+      type: "text/markdown",
+    });
+    setFile(generatedFile);
+    // Pre-fill name if empty
+    if (!form.name && aiName) {
+      setForm((f) => ({ ...f, name: aiName }));
+    }
+    setAiExpanded(false);
   };
 
   return (
@@ -126,13 +173,81 @@ export default function CreatePage() {
             </h1>
             <p className="text-text-secondary text-lg">
               Upload your AI skill instructions as a <strong>.md</strong> file.
-              It will be stored permanently on Filecoin via Lighthouse.
+              Stored permanently on <span className="text-green-400 font-medium">Filecoin</span> with cryptographic proof.
             </p>
           </div>
 
-          {/* ─── Form State ─────────────────────────── */}
           {step === "form" && (
             <form onSubmit={handleSubmit} className="space-y-6">
+
+              {/* ─── AI Generate Panel ────────────────────────── */}
+              <div className="glass rounded-2xl overflow-hidden border border-brand-purple/20">
+                <button
+                  type="button"
+                  onClick={() => setAiExpanded(!aiExpanded)}
+                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-white/5 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-brand-purple/20 flex items-center justify-center">
+                      <Sparkles className="w-4 h-4 text-brand-purple-light" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-semibold">✨ Generate with Gemini AI</p>
+                      <p className="text-xs text-text-muted">Describe your skill in plain English → get a SKILL.md</p>
+                    </div>
+                  </div>
+                  {aiExpanded ? <ChevronUp className="w-4 h-4 text-text-muted" /> : <ChevronDown className="w-4 h-4 text-text-muted" />}
+                </button>
+
+                {aiExpanded && (
+                  <div className="px-6 pb-6 space-y-4 border-t border-white/5">
+                    <div className="pt-4">
+                      <label className="block text-sm font-medium mb-2">Describe your skill</label>
+                      <textarea
+                        value={aiDescription}
+                        onChange={(e) => setAiDescription(e.target.value)}
+                        placeholder='e.g. "A skill that helps Claude audit Solidity smart contracts for security vulnerabilities, checking for reentrancy, overflow, and access control issues"'
+                        rows={4}
+                        className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/8 text-sm focus:outline-none focus:border-brand-purple/50 transition-colors resize-none"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleAiGenerate}
+                      disabled={aiGenerating || aiDescription.length < 10}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-purple/20 border border-brand-purple/30 text-sm font-medium text-brand-purple-light hover:bg-brand-purple/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {aiGenerating ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Generating with Gemini...</>
+                      ) : (
+                        <><Wand2 className="w-4 h-4" /> Generate SKILL.md</>
+                      )}
+                    </button>
+
+                    {aiError && (
+                      <p className="text-xs text-red-400 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" /> {aiError}
+                      </p>
+                    )}
+
+                    {aiPreview && (
+                      <div className="space-y-3">
+                        <div className="glass rounded-xl p-4 max-h-72 overflow-y-auto">
+                          <pre className="text-xs text-text-secondary whitespace-pre-wrap font-mono leading-relaxed">{aiPreview}</pre>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleUseGeneratedSkill}
+                          className="w-full py-2.5 rounded-xl bg-green-500/15 border border-green-500/25 text-sm font-medium text-green-400 hover:bg-green-500/25 transition-all"
+                        >
+                          ✓ Use This Skill →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="glass rounded-2xl p-6 space-y-5">
                 <h3 className="text-sm font-semibold text-text-secondary">Skill Information</h3>
 
@@ -306,7 +421,7 @@ export default function CreatePage() {
                 <div className="h-full bg-gradient-to-r from-brand-purple to-brand-cyan rounded-full animate-pulse w-3/4" />
               </div>
               <p className="text-xs text-text-muted mt-4">
-                Uploading to IPFS via Lighthouse — usually takes 2-5 seconds...
+                Uploading to Filecoin via Synapse SDK — usually takes 5-15 seconds...
               </p>
             </div>
           )}
@@ -317,18 +432,23 @@ export default function CreatePage() {
               <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-6" />
               <h3 className="text-2xl font-bold mb-2">Skill Published on Filecoin! 🎉</h3>
               <p className="text-text-secondary mb-8">
-                Your skill is now live on the Skillcoin marketplace and stored permanently on IPFS/Filecoin.
+                Your skill is now live on the SkillCoin marketplace,
+                stored permanently on Filecoin with cryptographic PDP proofs.
               </p>
 
               <div className="glass rounded-xl p-6 text-left max-w-md mx-auto space-y-3 mb-8">
+                <div className="flex justify-between text-sm items-center">
+                  <span className="text-text-muted">Storage:</span>
+                  <FilecoinProofBadge dataSetId={result.filecoinDatasetId} pieceCid={result.pieceCid} />
+                </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-text-muted">IPFS CID:</span>
+                  <span className="text-text-muted">Root CID:</span>
                   <code className="text-brand-cyan font-mono text-xs">{result.cid?.substring(0, 24)}...</code>
                 </div>
-                {result.dealId && (
+                {result.pieceCid && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-text-muted">Filecoin Deal:</span>
-                    <code className="text-text-secondary font-mono text-xs">{result.dealId?.substring(0, 24)}...</code>
+                    <span className="text-text-muted">Piece CID:</span>
+                    <code className="text-text-secondary font-mono text-xs">{result.pieceCid?.substring(0, 20)}...</code>
                   </div>
                 )}
                 <div className="flex justify-between text-sm">
@@ -336,7 +456,7 @@ export default function CreatePage() {
                   <code className="text-brand-cyan font-mono text-xs">skillcoin install {result.name}</code>
                 </div>
                 {result.gatewayUrl && (
-                  <div className="pt-2 border-t border-white/5">
+                  <div className="pt-2 border-t border-white/5 flex flex-col gap-1">
                     <a
                       href={result.gatewayUrl}
                       target="_blank"
@@ -345,13 +465,23 @@ export default function CreatePage() {
                     >
                       View on IPFS Gateway <ExternalLink className="w-3 h-3" />
                     </a>
+                    {result.filecoinDatasetId && (
+                      <a
+                        href={`https://pdp.vxb.ai/calibration/dataset/${result.filecoinDatasetId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1"
+                      >
+                        View Filecoin PDP Proofs <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
                   </div>
                 )}
               </div>
 
               <div className="flex gap-4 justify-center">
                 <button
-                  onClick={() => { setStep("form"); setFile(null); setResult(null); }}
+                  onClick={() => { setStep("form"); setFile(null); setResult(null); setAiPreview(""); }}
                   className="btn-secondary"
                 >
                   Publish Another

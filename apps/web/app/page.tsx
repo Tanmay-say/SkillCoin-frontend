@@ -99,8 +99,8 @@ export default function HomePage() {
               </div>
               <h3 className="text-lg font-semibold mb-2">Store on Filecoin</h3>
               <p className="text-sm text-text-secondary leading-relaxed">
-                Every skill is permanently stored on Filecoin via Lighthouse.
-                Content-addressed by CID — immutable and censorship-resistant.
+                Every skill is permanently stored on Filecoin via Synapse SDK.
+                Daily PDP proofs guarantee your skill exists — forever.
               </p>
             </div>
 
@@ -141,7 +141,7 @@ export default function HomePage() {
               {
                 step: "02",
                 title: "Store & List",
-                desc: "Skill is uploaded to Filecoin via Lighthouse, anchored on Calibration testnet, and listed on the marketplace.",
+                desc: "Skill is uploaded to Filecoin via Synapse SDK, anchored on Calibration testnet with PDP proofs, and listed on the marketplace.",
                 icon: <Shield className="w-5 h-5" />,
               },
               {

@@ -13,8 +13,9 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
+    "@filoz/synapse-sdk": "^0.1.0",
+    "@google/generative-ai": "^0.21.0",
     "@hono/node-server": "^1.11.0",
-    "@lighthouse-web3/sdk": "^0.3.0",
     "@prisma/client": "^5.14.0",
     "axios": "^1.7.0",
     "dotenv": "^16.4.0",

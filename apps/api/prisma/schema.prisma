@@ -19,9 +19,11 @@ model Skill {
   version        String    @default("1.0.0")
   category       String?
   tags           String[]
-  zipCid         String
-  manifestCid    String?
-  filecoinDealId String?
+  zipCid             String
+  manifestCid        String?
+  filecoinDealId     String?
+  pieceCid           String?   // Filecoin Piece CID for PDP proof verification
+  filecoinDatasetId  Int?      // Synapse dataset ID for proof URL
   creatorAddress String
   priceAmount    Decimal   @default(0.5)
   priceCurrency  String    @default("USDC")

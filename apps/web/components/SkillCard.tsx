@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Download, Copy, Check } from "lucide-react";
+import { Download, Copy, Check, Sparkles } from "lucide-react";
 import { useState } from "react";
 import type { Skill } from "@/lib/api";
+import FilecoinProofBadge from "@/components/FilecoinProofBadge";
 
 export default function SkillCard({ skill }: { skill: Skill }) {
   const [copied, setCopied] = useState(false);
@@ -41,11 +42,13 @@ export default function SkillCard({ skill }: { skill: Skill }) {
             </h3>
             <span className="text-xs text-text-muted font-mono">v{skill.version}</span>
           </div>
-          {skill.category && (
-            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${badgeClass}`}>
-              {skill.category}
-            </span>
-          )}
+          <div className="flex flex-col items-end gap-1">
+            {skill.category && (
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${badgeClass}`}>
+                {skill.category}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Description */}
@@ -68,34 +71,40 @@ export default function SkillCard({ skill }: { skill: Skill }) {
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-between pt-3 border-t border-white/5">
-          <div className="flex items-center gap-4">
-            <span className="text-sm font-semibold text-brand-cyan">
-              {Number(skill.priceAmount) === 0 ? "FREE" : `${skill.priceAmount} ${skill.priceCurrency}`}
-            </span>
-            <span className="flex items-center gap-1 text-xs text-text-muted">
-              <Download className="w-3 h-3" />
-              {skill.downloads.toLocaleString()}
-            </span>
+        <div className="space-y-2 pt-3 border-t border-white/5">
+          {/* Filecoin proof badge */}
+          <FilecoinProofBadge
+            dataSetId={(skill as any).filecoinDatasetId}
+            pieceCid={(skill as any).pieceCid}
+          />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-semibold text-brand-cyan">
+                {Number(skill.priceAmount) === 0 ? "FREE" : `${skill.priceAmount} ${skill.priceCurrency}`}
+              </span>
+              <span className="flex items-center gap-1 text-xs text-text-muted">
+                <Download className="w-3 h-3" />
+                {skill.downloads.toLocaleString()}
+              </span>
+            </div>
+            <button
+              onClick={handleCopy}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 text-text-secondary hover:text-white transition-all"
+              title="Copy install command"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3 h-3 text-green-400" />
+                  <span className="text-green-400">Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3 h-3" />
+                  Install
+                </>
+              )}
+            </button>
           </div>
-
-          <button
-            onClick={handleCopy}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 text-text-secondary hover:text-white transition-all"
-            title="Copy install command"
-          >
-            {copied ? (
-              <>
-                <Check className="w-3 h-3 text-green-400" />
-                <span className="text-green-400">Copied!</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3 h-3" />
-                Install
-              </>
-            )}
-          </button>
         </div>
       </div>
     </Link>
