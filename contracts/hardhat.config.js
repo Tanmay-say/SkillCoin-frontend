@@ -6,9 +6,10 @@ const PRIVATE_KEY = process.env.FILECOIN_PRIVATE_KEY || "";
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
   solidity: {
-    version: "0.8.20",
+    version: "0.8.24",
     settings: {
       optimizer: { enabled: true, runs: 200 },
+      evmVersion: "cancun",
     },
   },
   networks: {
@@ -26,7 +27,8 @@ module.exports = {
     },
   },
   paths: {
-    sources: "./",
+    // Point to src/ subfolder — avoids Hardhat picking up node_modules .sol files
+    sources: "./src",
     tests: "./test",
     cache: "./cache",
     artifacts: "./artifacts",

@@ -1,0 +1,11 @@
+{
+  "network": "filecoin-calibration",
+  "chainId": 314159,
+  "deployedAt": "2026-03-15T14:07:29.664Z",
+  "deployer": "0x286bd33A27079f28a4B4351a85Ad7f23A04BDdfC",
+  "contracts": {
+    "SkillRegistry": "0x30AcdeB5C03F5E02b0E7e9f22B20cBC4dF182690",
+    "SkillLicenseNFT": "0x7cFaf07016514f5261768Ce991D9E373cBC8d6e9"
+  },
+  "explorerBaseUrl": "https://calibration.filfox.info/en/address"
+}
