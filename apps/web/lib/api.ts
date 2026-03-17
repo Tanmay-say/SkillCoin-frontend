@@ -1,10 +1,16 @@
-import axios from "axios";
+import axios, { type AxiosError } from "axios";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+// Warn in dev if using fallback
+if (typeof window !== "undefined" && !process.env.NEXT_PUBLIC_API_URL) {
+  console.warn("[SkillCoin] NEXT_PUBLIC_API_URL not set — using localhost:3001 fallback");
+}
 
 export const api = axios.create({
   baseURL: API_BASE,
   headers: { "Content-Type": "application/json" },
+  timeout: 10000, // 10s timeout so Vercel pages don't hang
 });
 
 // ─── Types ─────────────────────────────────────────────
@@ -26,6 +32,7 @@ export interface Skill {
   downloads: number;
   published: boolean;
   fvmContractId: string | null;
+  storageType?: "filecoin" | "local"; // "local" means not yet on-chain
   createdAt: string;
   updatedAt: string;
 }
@@ -48,8 +55,18 @@ export async function fetchSkills(params?: {
   category?: string;
   sort?: string;
 }): Promise<PaginatedResponse<Skill>> {
-  const { data } = await api.get("/api/skills", { params });
-  return data.data;
+  try {
+    const { data } = await api.get("/api/skills", { params });
+    return data.data;
+  } catch (err) {
+    const e = err as AxiosError;
+    // Return empty gracefully — Vercel page won't show blank screen
+    if (e.code === "ECONNREFUSED" || e.code === "ERR_NETWORK" || e.response?.status === 503) {
+      console.warn("[SkillCoin] API unreachable — returning empty skill list");
+      return { skills: [], pagination: { page: 1, limit: 6, total: 0, totalPages: 0 } };
+    }
+    throw err;
+  }
 }
 
 export async function fetchSkill(slug: string): Promise<Skill> {
@@ -60,7 +77,7 @@ export async function fetchSkill(slug: string): Promise<Skill> {
 export async function searchSkills(
   q: string,
   page = 1,
-  category?: string  // MED-BUG-02: server-side category filtering
+  category?: string
 ): Promise<PaginatedResponse<Skill>> {
   const params: Record<string, any> = { q, page };
   if (category && category !== "all") params.category = category;

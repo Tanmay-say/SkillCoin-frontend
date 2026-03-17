@@ -1,9 +1,15 @@
 import { Hono } from "hono";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { generateRateLimit } from "../middleware/rateLimit";
 
 const generate = new Hono();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+
+// Input size limits (prevent Gemini cost DoS)
+const MAX_DESCRIPTION_LEN = 2000;
+const MAX_SKILL_MD_LEN = 50_000;
+const MAX_INSTRUCTION_LEN = 2000;
 
 const SKILL_SYSTEM_PROMPT = `You are an expert at writing Claude/AI skill files (SKILL.md).
 A SKILL.md file is a structured markdown file that teaches an AI agent how to perform a specific task.
@@ -35,7 +41,9 @@ Constraints:
  * Body: { description: string, category?: string }
  *
  * Generates a SKILL.md using Gemini AI from a plain-English description.
+ * Rate-limited: 20 requests/hour per IP.
  */
+generate.use("/", generateRateLimit);
 generate.post("/", async (c) => {
   try {
     if (!GEMINI_API_KEY) {
@@ -45,8 +53,12 @@ generate.post("/", async (c) => {
     const body = await c.req.json();
     const { description, category } = body;
 
+    // Input validation + size caps (S-4 fix)
     if (!description || description.length < 10) {
       return c.json({ success: false, error: "Description must be at least 10 characters" }, 400);
+    }
+    if (description.length > MAX_DESCRIPTION_LEN) {
+      return c.json({ success: false, error: `Description must be under ${MAX_DESCRIPTION_LEN} characters` }, 400);
     }
 
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
@@ -55,8 +67,12 @@ generate.post("/", async (c) => {
       systemInstruction: SKILL_SYSTEM_PROMPT,
     });
 
-    const prompt = `Create a professional SKILL.md for the following:\n\nDescription: ${description}${
-      category ? `\nCategory: ${category}` : ""
+    // Sanitize inputs before injecting into prompt (L-1 fix)
+    const safeDescription = description.replace(/```/g, "").substring(0, MAX_DESCRIPTION_LEN);
+    const safeCategory = category ? String(category).replace(/[^a-z0-9-]/gi, "").substring(0, 50) : null;
+
+    const prompt = `Create a professional SKILL.md for the following:\n\nDescription: ${safeDescription}${
+      safeCategory ? `\nCategory: ${safeCategory}` : ""
     }\n\nGenerate the complete SKILL.md now:`;
 
     const result = await model.generateContent(prompt);
@@ -102,7 +118,9 @@ generate.post("/", async (c) => {
  * Body: { existingSkillMd: string, instruction: string }
  *
  * Modifies an existing SKILL.md based on a natural language instruction.
+ * Rate-limited + size-capped.
  */
+generate.use("/modify", generateRateLimit);
 generate.post("/modify", async (c) => {
   try {
     if (!GEMINI_API_KEY) {
@@ -115,8 +133,20 @@ generate.post("/modify", async (c) => {
       return c.json({ success: false, error: "existingSkillMd and instruction are required" }, 400);
     }
 
+    // Size caps (S-4 fix — prevent 10MB Gemini cost DoS)
+    if (existingSkillMd.length > MAX_SKILL_MD_LEN) {
+      return c.json({ success: false, error: `existingSkillMd must be under ${MAX_SKILL_MD_LEN} characters` }, 400);
+    }
+    if (instruction.length > MAX_INSTRUCTION_LEN) {
+      return c.json({ success: false, error: `Instruction must be under ${MAX_INSTRUCTION_LEN} characters` }, 400);
+    }
+
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    // Sanitize inputs before injecting (L-1 fix)
+    const safeSkillMd = existingSkillMd.substring(0, MAX_SKILL_MD_LEN);
+    const safeInstruction = instruction.replace(/```/g, "").substring(0, MAX_INSTRUCTION_LEN);
 
     const prompt = `You are an expert at editing AI skill files (SKILL.md).
 The user will give you an existing SKILL.md and describe a modification.
@@ -125,10 +155,10 @@ Do not output anything else.
 
 Existing SKILL.md:
 
-${existingSkillMd}
+${safeSkillMd}
 
 ---
-Modification request: ${instruction}`;
+Modification request: ${safeInstruction}`;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();

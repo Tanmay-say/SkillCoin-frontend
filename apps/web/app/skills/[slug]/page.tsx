@@ -186,12 +186,22 @@ export default function SkillDetailPage() {
 
               {/* Filecoin Info */}
               <div className="glass rounded-2xl p-6 space-y-4">
-                <h3 className="text-sm font-semibold text-text-secondary">Storage</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-text-secondary">Storage</h3>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    skill.storageType === "filecoin" || !skill.zipCid.startsWith("local_")
+                      ? "bg-green-500/15 text-green-400 border border-green-500/20"
+                      : "bg-amber-500/15 text-amber-400 border border-amber-500/20"
+                  }`}>
+                    {skill.storageType === "filecoin" || !skill.zipCid.startsWith("local_") ? "On-Chain" : "Local"}
+                  </span>
+                </div>
 
                 <div className="space-y-3">
                   <div>
                     <span className="flex items-center gap-2 text-xs text-text-muted mb-1">
-                      <Database className="w-3 h-3" /> IPFS CID
+                      <Database className="w-3 h-3" />
+                      {skill.zipCid.startsWith("local_") ? "Local CID" : "IPFS CID"}
                     </span>
                     <div className="flex items-center gap-2">
                       <code className="text-xs text-brand-cyan font-mono break-all">
@@ -199,14 +209,30 @@ export default function SkillDetailPage() {
                       </code>
                       <CopyButton text={skill.zipCid} label="" className="text-text-muted hover:text-white flex-shrink-0" />
                     </div>
-                    <a
-                      href={`https://gateway.lighthouse.storage/ipfs/${skill.zipCid}`}
-                      target="_blank"
-                      rel="noopener"
-                      className="text-xs text-text-muted hover:text-brand-cyan transition-colors flex items-center gap-1 mt-1"
-                    >
-                      View on IPFS <ExternalLink className="w-3 h-3" />
-                    </a>
+                    {!skill.zipCid.startsWith("local_") && (
+                      <div className="mt-2 space-y-1">
+                        {[
+                          { label: "IPFS", url: `https://ipfs.io/ipfs/${skill.zipCid}` },
+                          { label: "W3S", url: `https://w3s.link/ipfs/${skill.zipCid}` },
+                          { label: "Cloudflare", url: `https://cloudflare-ipfs.com/ipfs/${skill.zipCid}` },
+                        ].map((gw) => (
+                          <a
+                            key={gw.label}
+                            href={gw.url}
+                            target="_blank"
+                            rel="noopener"
+                            className="text-xs text-text-muted hover:text-brand-cyan transition-colors flex items-center gap-1"
+                          >
+                            {gw.label} Gateway <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    {skill.zipCid.startsWith("local_") && (
+                      <p className="text-xs text-amber-400/70 mt-1">
+                        Stored on API server. Configure FILECOIN_PRIVATE_KEY for decentralized IPFS storage.
+                      </p>
+                    )}
                   </div>
 
                   {skill.filecoinDealId && (
@@ -215,8 +241,18 @@ export default function SkillDetailPage() {
                         <Shield className="w-3 h-3" /> Filecoin Deal
                       </span>
                       <code className="text-xs text-text-secondary font-mono break-all">
-                        {skill.filecoinDealId.substring(0, 24)}...
+                        {skill.filecoinDealId}
                       </code>
+                      {skill.filecoinDealId.startsWith("dataset-") && (
+                        <a
+                          href={`https://pdp.vxb.ai/calibration/dataset/${skill.filecoinDealId.replace("dataset-", "")}`}
+                          target="_blank"
+                          rel="noopener"
+                          className="text-xs text-text-muted hover:text-brand-cyan transition-colors flex items-center gap-1 mt-1"
+                        >
+                          View PDP Proof <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
                     </div>
                   )}
                 </div>

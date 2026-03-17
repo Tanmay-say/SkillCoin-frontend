@@ -3,8 +3,10 @@ import { FilecoinStorageService } from "../services/filecoin-storage";
 import { SynapseService } from "../services/synapse";
 import { SkillService } from "../services/skill";
 import { UploadMetadataSchema } from "../types";
+import { type AuthUser } from "../middleware/auth";
 
-const upload = new Hono();
+type Variables = { user: AuthUser };
+const upload = new Hono<{ Variables: Variables }>();
 
 // Max upload size: 10MB (for .md files this is very generous)
 const MAX_SIZE = 10 * 1024 * 1024;
@@ -16,7 +18,7 @@ const MAX_SIZE = 10 * 1024 * 1024;
  *  - file: .md file (the skill instructions)
  *  - metadata: JSON string with skill info
  *
- * Simplified flow: accepts a single .md file → uploads to Lighthouse → saves to DB
+ * Simplified flow: accepts a single .md file → uploads to Filecoin via Synapse SDK → saves to DB
  */
 upload.post("/", async (c) => {
   try {
@@ -134,18 +136,31 @@ upload.post("/", async (c) => {
       creatorAddress,
       priceAmount: metadata.price,
       priceCurrency: metadata.currency,
+      storageType: uploadResult.storageType,
     });
+
+    const isLocal = uploadResult.cid.startsWith("local_");
+    const gateways = isLocal
+      ? [uploadResult.gatewayUrl]
+      : [
+          `https://ipfs.io/ipfs/${uploadResult.cid}`,
+          `https://w3s.link/ipfs/${uploadResult.cid}`,
+          `https://cloudflare-ipfs.com/ipfs/${uploadResult.cid}`,
+        ];
 
     return c.json({
       success: true,
       data: {
         skillId: skill.id,
+        slug,
         cid: uploadResult.cid,
         pieceCid: uploadResult.pieceCid || null,
         filecoinDatasetId: uploadResult.filecoinDatasetId || null,
         dealId: skill.filecoinDealId,
         status: "uploaded",
+        storageType: uploadResult.storageType,
         gatewayUrl: uploadResult.gatewayUrl,
+        gateways,
         explorerUrl: uploadResult.filecoinDatasetId
           ? `https://pdp.vxb.ai/calibration/dataset/${uploadResult.filecoinDatasetId}`
           : deal.explorerUrl,
@@ -153,6 +168,7 @@ upload.post("/", async (c) => {
           ? { dataSetId: uploadResult.filecoinDatasetId, verified: true }
           : null,
         marketplaceUrl: `/skills/${slug}`,
+        installCmd: `skillcoin install ${slug}`,
       },
     });
   } catch (error: any) {

@@ -30,6 +30,7 @@ export class SkillService {
     creatorAddress: string;
     priceAmount?: number;
     priceCurrency?: string;
+    storageType: string;
   }) {
     // Upsert the creator user
     await prisma.user.upsert({
@@ -57,6 +58,7 @@ export class SkillService {
         creatorAddress: data.creatorAddress,
         priceAmount: data.priceAmount ?? 0.5,
         priceCurrency: data.priceCurrency || "USDC",
+        storageType: data.storageType,
         published: true,
       },
     });

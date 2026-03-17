@@ -3,7 +3,7 @@ import path from "path";
 import type { UploadResult } from "../types";
 
 /**
- * FilecoinStorageService — drop-in replacement for LighthouseService
+ * FilecoinStorageService — primary storage backend via @filoz/synapse-sdk.
  * Uses @filoz/synapse-sdk for permanent Filecoin storage with PDP proofs.
  * Falls back to local storage when private key is not configured.
  */
@@ -15,7 +15,11 @@ const IPFS_GATEWAY = "https://ipfs.io/ipfs";
 
 let _synapse: any = null;
 
-async function getSynapse(): Promise<any> {
+export function hasFilecoinKey(): boolean {
+  return !!FILECOIN_PRIVATE_KEY;
+}
+
+export async function getSynapse(): Promise<any> {
   if (_synapse) return _synapse;
 
   if (!FILECOIN_PRIVATE_KEY) {
@@ -67,6 +71,7 @@ export class FilecoinStorageService {
         size: buffer.length,
         uploadedAt: new Date(),
         gatewayUrl: `${IPFS_GATEWAY}/${rootCid}`,
+        storageType: "filecoin",
       };
     } catch (error: any) {
       console.warn(`[Filecoin] Upload failed: ${error.message}`);
@@ -76,13 +81,29 @@ export class FilecoinStorageService {
   }
 
   /**
-   * Get the IPFS gateway URL for a CID.
+   * Get the download URL for a CID.
+   * Local CIDs resolve to the server's /uploads/ endpoint;
+   * real CIDs resolve to IPFS gateways.
    */
   static getFileUrl(cid: string): string {
     if (cid.startsWith("local_")) {
-      return `http://localhost:${process.env.PORT || 3001}/uploads/${cid}`;
+      const resolvedName = this.resolveLocalFilename(cid);
+      return `http://localhost:${process.env.PORT || 3001}/uploads/${resolvedName}`;
     }
     return `${IPFS_GATEWAY}/${cid}`;
+  }
+
+  /**
+   * Resolve a local CID to its actual filename on disk.
+   * Handles both new format (cid.ext) and legacy format (cid_filename).
+   */
+  static resolveLocalFilename(cid: string): string {
+    const uploadsDir = path.join(process.cwd(), "uploads");
+    if (!fs.existsSync(uploadsDir)) return cid;
+
+    const files = fs.readdirSync(uploadsDir);
+    const match = files.find((f) => f.startsWith(cid));
+    return match || cid;
   }
 
   /**
@@ -136,6 +157,7 @@ export class FilecoinStorageService {
 
   /**
    * Local fallback for when Filecoin is unavailable.
+   * Files are saved with the CID as the filename so getFileUrl() can find them.
    */
   private static async _localFallback(
     buffer: Buffer,
@@ -143,6 +165,7 @@ export class FilecoinStorageService {
   ): Promise<FilecoinUploadResult> {
     const crypto = await import("crypto");
     const hash = crypto.createHash("sha256").update(buffer).digest("hex");
+    const ext = path.extname(filename) || ".md";
     const cid = `local_${hash.substring(0, 48)}`;
 
     const uploadsDir = path.join(process.cwd(), "uploads");
@@ -150,7 +173,8 @@ export class FilecoinStorageService {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
 
-    const filePath = path.join(uploadsDir, `${cid}_${filename}`);
+    const savedName = `${cid}${ext}`;
+    const filePath = path.join(uploadsDir, savedName);
     fs.writeFileSync(filePath, buffer);
 
     console.log(`[Filecoin] ✓ Saved locally: ${filePath}`);
@@ -161,7 +185,8 @@ export class FilecoinStorageService {
       filecoinDatasetId: 0,
       size: buffer.length,
       uploadedAt: new Date(),
-      gatewayUrl: `http://localhost:${process.env.PORT || 3001}/uploads/${cid}_${filename}`,
+      gatewayUrl: `http://localhost:${process.env.PORT || 3001}/uploads/${savedName}`,
+      storageType: "local",
     };
   }
 }

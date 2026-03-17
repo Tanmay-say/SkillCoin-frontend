@@ -57,6 +57,8 @@ export function installCommand(program: Command) {
       }
 
       // Show skill info
+      const isLocal = skill.zipCid?.startsWith("local_");
+      const storageLabel = isLocal ? chalk.yellow("local") : chalk.green("filecoin");
       console.log(
         chalk.dim(`  Description: ${skill.description?.substring(0, 80) || "—"}`)
       );
@@ -64,11 +66,14 @@ export function installCommand(program: Command) {
       const isFree = price === 0;
       console.log(
         chalk.dim(
-          `  Price: ${isFree ? chalk.green("Free") : chalk.yellow(`${price} ${skill.priceCurrency}`)}`
+          `  Price:   ${isFree ? chalk.green("Free") : chalk.yellow(`${price} ${skill.priceCurrency}`)}`
         )
       );
       console.log(
-        chalk.dim(`  CID: ${skill.zipCid?.substring(0, 30)}...`)
+        chalk.dim(`  Storage: ${storageLabel}`)
+      );
+      console.log(
+        chalk.dim(`  CID:     ${chalk.white(skill.zipCid)}`)
       );
       console.log();
 
@@ -109,9 +114,10 @@ export function installCommand(program: Command) {
         console.log();
       }
 
-      // Step 3: Download from IPFS
+      // Step 3: Download from IPFS/local
+      const dlLabel = isLocal ? "API server" : "IPFS/Filecoin";
       const dlSpinner = ora({
-        text: chalk.dim("Downloading from IPFS/Filecoin..."),
+        text: chalk.dim(`Downloading from ${dlLabel}...`),
         color: "cyan",
       }).start();
 
@@ -120,12 +126,15 @@ export function installCommand(program: Command) {
         fileBuffer = await downloadFromCID(skill.zipCid);
         dlSpinner.succeed(
           chalk.green(
-            `Downloaded ${(fileBuffer.length / 1024).toFixed(1)} KB`
+            `Downloaded ${(fileBuffer.length / 1024).toFixed(1)} KB from ${dlLabel}`
           )
         );
       } catch (error: any) {
         dlSpinner.fail(chalk.red("Download failed"));
         console.log(chalk.dim(`  Error: ${error.message}`));
+        if (!isLocal) {
+          console.log(chalk.dim(`  Tried gateways: ipfs.io, w3s.link, cloudflare-ipfs.com`));
+        }
         console.log();
         return;
       }
@@ -152,20 +161,21 @@ export function installCommand(program: Command) {
 
         saveSpinner.succeed(chalk.green("Skill installed"));
 
-        // Success
         console.log();
         console.log(
           chalk.bold.green(
             `  ✓ Installed ${chalk.cyan(skill.name)}@${chalk.dim(skill.version)}`
           )
         );
-        console.log(chalk.dim(`    CID:  ${skill.zipCid}`));
-        console.log(chalk.dim(`    Path: ${installPath}`));
-        console.log(
-          chalk.dim(
-            `    Gateway: https://gateway.lighthouse.storage/ipfs/${skill.zipCid}`
-          )
-        );
+        console.log(chalk.dim(`    Path:    ${installPath}`));
+        console.log(chalk.dim(`    CID:     ${skill.zipCid}`));
+        console.log(chalk.dim(`    Storage: ${isLocal ? "local (API server)" : "Filecoin (IPFS)"}`));
+        if (!isLocal) {
+          console.log(chalk.dim(`    IPFS:    ${chalk.cyan(`https://ipfs.io/ipfs/${skill.zipCid}`)}`));
+          if (skill.filecoinDatasetId) {
+            console.log(chalk.dim(`    Proof:   ${chalk.cyan(`https://pdp.vxb.ai/calibration/dataset/${skill.filecoinDatasetId}`)}`));
+          }
+        }
         console.log();
       } catch (error: any) {
         saveSpinner.fail(chalk.red("Installation failed"));

@@ -1,24 +1,39 @@
 {
   "name": "skillcoin",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "npm for AI Agent Skills — Decentralized, Paid, Permanent. Install AI skills from the Skillcoin marketplace stored on Filecoin/IPFS.",
   "bin": {
     "skillcoin": "./dist/bin/skillcoin.js"
   },
   "main": "./dist/index.js",
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "prepublishOnly": "npm run build",
     "start": "node dist/bin/skillcoin.js"
   },
-  "keywords": ["ai", "skills", "filecoin", "cli", "agents", "ipfs", "lighthouse", "marketplace", "npm"],
+  "keywords": [
+    "ai",
+    "skills",
+    "filecoin",
+    "cli",
+    "agents",
+    "ipfs",
+    "lighthouse",
+    "marketplace",
+    "npm"
+  ],
   "license": "MIT",
   "dependencies": {
+    "@google/generative-ai": "^0.21.0",
     "chalk": "^4.1.2",
     "commander": "^12.1.0",
     "ethers": "^6.12.0",
+    "filecoin-pin": "^0.18.0",
     "open": "^8.4.2",
     "ora": "^5.4.1"
   },

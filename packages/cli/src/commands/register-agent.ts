@@ -10,12 +10,12 @@
  * Usage: skillcoin register-agent
  */
 
-import { execSync } from "child_process";
 import { ethers } from "ethers";
 import fs from "fs";
 import path from "path";
 import ora from "ora";
 import chalk from "chalk";
+import { uploadWithFilecoinPin, isFilecoinPinAvailable } from "../lib/filecoin-pin";
 
 // ERC-8004 Identity Registry — Base Sepolia (official)
 const ERC8004_REGISTRY = "0x8004AA63c570c570eBF15376c0dB199918BFe9Fb";
@@ -113,25 +113,26 @@ export async function registerAgentCommand() {
   let pieceCid = "";
   let dataSetId = 0;
 
-  try {
-    const uploadResult = execSync(`filecoin-pin add "${cardPath}" --auto-fund --json`, {
-      env: { ...process.env },
-      timeout: 120_000,
-    }).toString();
+  const fpAvailable = await isFilecoinPinAvailable();
 
-    const parsed = JSON.parse(uploadResult);
-    rootCid = parsed.rootCid || parsed.cid || parsed.Hash;
-    pieceCid = parsed.pieceCid || "";
-    dataSetId = parsed.dataSetId || 0;
-    uploadSpinner.succeed(chalk.green("Uploaded to Filecoin!"));
-  } catch (err: any) {
-    // Fallback: if filecoin-pin CLI is not available, use a placeholder CID
+  if (fpAvailable) {
+    try {
+      const uploadResult = await uploadWithFilecoinPin(cardPath);
+      rootCid = uploadResult.rootCid;
+      pieceCid = uploadResult.pieceCid;
+      dataSetId = uploadResult.dataSetId;
+      uploadSpinner.succeed(chalk.green("Uploaded to Filecoin via filecoin-pin!"));
+    } catch (err: any) {
+      uploadSpinner.warn(
+        chalk.yellow(`filecoin-pin upload failed: ${err.message}`)
+      );
+      console.log(chalk.dim("  Using placeholder CID for demo mode"));
+      rootCid = `bafkreidemo${Date.now()}`;
+    }
+  } else {
     uploadSpinner.warn(
-      chalk.yellow(
-        "filecoin-pin CLI not found or upload failed — using placeholder CID for demo"
-      )
+      chalk.yellow("filecoin-pin not available — using placeholder CID for demo")
     );
-    console.log(chalk.dim("  Install: npm install -g filecoin-pin"));
     rootCid = `bafkreidemo${Date.now()}`;
   }
 

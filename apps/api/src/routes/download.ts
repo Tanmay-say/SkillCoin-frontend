@@ -1,11 +1,46 @@
 import { Hono } from "hono";
 import { PaymentService } from "../services/payment";
 import { SkillService } from "../services/skill";
-import { LighthouseService } from "../services/lighthouse";
-import { authMiddleware, generateDownloadToken } from "../middleware/auth";
+import { FilecoinStorageService } from "../services/filecoin-storage";
+import { authMiddleware, generateDownloadToken, type AuthUser } from "../middleware/auth";
 import { VerifyPaymentSchema } from "../types";
 
-const download = new Hono();
+const IPFS_GATEWAYS = [
+  "https://ipfs.io/ipfs",
+  "https://w3s.link/ipfs",
+  "https://cloudflare-ipfs.com/ipfs",
+];
+
+function buildAccessInfo(skill: any) {
+  const cid = skill.zipCid;
+  const isLocal = cid.startsWith("local_");
+  const storageType: string = skill.storageType || (isLocal ? "local" : "filecoin");
+
+  const downloadUrl = FilecoinStorageService.getFileUrl(cid);
+
+  const gateways = isLocal
+    ? [downloadUrl]
+    : IPFS_GATEWAYS.map((gw) => `${gw}/${cid}`);
+
+  const access: Record<string, any> = {
+    cid,
+    downloadUrl,
+    storageType,
+    gateways,
+  };
+
+  if (skill.pieceCid) access.pieceCid = skill.pieceCid;
+  if (skill.filecoinDatasetId) {
+    access.filecoinDatasetId = skill.filecoinDatasetId;
+    access.proofUrl = `https://pdp.vxb.ai/calibration/dataset/${skill.filecoinDatasetId}`;
+  }
+  if (skill.filecoinDealId) access.dealId = skill.filecoinDealId;
+
+  return access;
+}
+
+type Variables = { user: AuthUser };
+const download = new Hono<{ Variables: Variables }>();
 
 /**
  * GET /api/skills/:slug/download
@@ -17,12 +52,13 @@ const download = new Hono();
 download.get("/:slug/download", async (c) => {
   try {
     const slug = c.req.param("slug");
-    // API-01 FIX: Only return published skills
     const skill = await SkillService.getSkillBySlug(slug);
 
     if (!skill) {
       return c.json({ success: false, error: "Skill not found" }, 404);
     }
+
+    const access = buildAccessInfo(skill);
 
     // Free skill — no auth required
     if (Number(skill.priceAmount) === 0 || skill.priceCurrency === "FREE") {
@@ -30,8 +66,7 @@ download.get("/:slug/download", async (c) => {
       return c.json({
         success: true,
         data: {
-          cid: skill.zipCid,
-          downloadUrl: LighthouseService.getFileUrl(skill.zipCid),
+          ...access,
           free: true,
         },
       });
@@ -57,8 +92,7 @@ download.get("/:slug/download", async (c) => {
       return c.json({
         success: true,
         data: {
-          cid: skill.zipCid,
-          downloadUrl: LighthouseService.getFileUrl(skill.zipCid),
+          ...access,
           token,
           expiresIn: 300,
           alreadyPurchased: true,
@@ -152,15 +186,13 @@ download.get("/:slug/download", async (c) => {
     return c.json({
       success: true,
       data: {
-        cid: skill.zipCid,
-        downloadUrl: LighthouseService.getFileUrl(skill.zipCid),
+        ...access,
         token,
         expiresIn: 300,
       },
     });
   } catch (error: any) {
     console.error("[Download] Error:", error);
-    // MED-02: Don't leak internal error details in production
     const msg = process.env.NODE_ENV === "development" ? error.message : "Internal server error";
     return c.json({ success: false, error: msg }, 500);
   }
@@ -226,13 +258,13 @@ download.post("/:slug/verify-payment", async (c) => {
 
     await SkillService.incrementDownloads(skill.id);
 
+    const access = buildAccessInfo(skill);
     const token = generateDownloadToken(skill.id, user.userId, skill.zipCid);
 
     return c.json({
       success: true,
       data: {
-        cid: skill.zipCid,
-        downloadUrl: LighthouseService.getFileUrl(skill.zipCid),
+        ...access,
         token,
         expiresIn: 300,
       },

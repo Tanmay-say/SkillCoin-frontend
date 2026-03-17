@@ -1,11 +1,12 @@
 import { Hono } from "hono";
-import jwt from "jsonwebtoken";
+import jwt, { type SignOptions } from "jsonwebtoken";
 
 // CRIT-01: Throw if JWT_SECRET is missing — never fall back to a hardcoded secret
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error("FATAL: JWT_SECRET environment variable is required. Set it in your .env file.");
 }
+const SECRET: string = JWT_SECRET;
 
 // HIGH-04: Validate JWT expiry — max 7 days, default 24h
 const RAW_EXPIRY = process.env.JWT_EXPIRY || "24h";
@@ -32,7 +33,7 @@ export function authMiddleware() {
     const token = authHeader.replace("Bearer ", "");
 
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as {
+      const decoded = jwt.verify(token, SECRET) as {
         userId: string;
         address: string;
       };
@@ -55,7 +56,7 @@ export function optionalAuth() {
     if (authHeader?.startsWith("Bearer ")) {
       const token = authHeader.replace("Bearer ", "");
       try {
-        const decoded = jwt.verify(token, JWT_SECRET) as {
+        const decoded = jwt.verify(token, SECRET) as {
           userId: string;
           address: string;
         };
@@ -73,11 +74,8 @@ export function optionalAuth() {
  * Generate a session JWT
  */
 export function generateToken(userId: string, address: string): string {
-  return jwt.sign(
-    { userId, address },
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRY }
-  );
+  const opts: SignOptions = { expiresIn: JWT_EXPIRY as any };
+  return jwt.sign({ userId, address }, SECRET, opts);
 }
 
 /**
@@ -88,9 +86,6 @@ export function generateDownloadToken(
   userId: string,
   cid: string
 ): string {
-  return jwt.sign(
-    { skillId, userId, cid, purpose: "download" },
-    JWT_SECRET,
-    { expiresIn: "5m" }
-  );
+  const opts: SignOptions = { expiresIn: "5m" };
+  return jwt.sign({ skillId, userId, cid, purpose: "download" }, SECRET, opts);
 }

@@ -47,7 +47,7 @@ export default function Footer() {
             <ul className="space-y-3">
               <li><a href="https://filecoin.io" target="_blank" className="text-sm text-text-muted hover:text-white transition-colors">Filecoin</a></li>
               <li><a href="https://x402.org" target="_blank" className="text-sm text-text-muted hover:text-white transition-colors">x402 Protocol</a></li>
-              <li><a href="https://lighthouse.storage" target="_blank" className="text-sm text-text-muted hover:text-white transition-colors">Lighthouse</a></li>
+              <li><a href="https://github.com/filecoin-project/synapse" target="_blank" className="text-sm text-text-muted hover:text-white transition-colors">Synapse SDK</a></li>
             </ul>
           </div>
         </div>

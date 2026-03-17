@@ -31,6 +31,7 @@ model Skill {
   published      Boolean   @default(false)
   downloads      Int       @default(0)
   fvmContractId  String?
+  storageType    String    @default("filecoin")
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   purchases      Purchase[]

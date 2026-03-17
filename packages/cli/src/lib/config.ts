@@ -6,6 +6,8 @@ const SKILLCOIN_DIR = path.join(os.homedir(), ".skillcoin");
 const CONFIG_PATH = path.join(SKILLCOIN_DIR, "config.json");
 const SKILLS_DIR = path.join(SKILLCOIN_DIR, "skills");
 
+export type AiProvider = "gemini" | "openai" | "claude" | "groq";
+
 export interface SkillcoinConfig {
   wallet: string;
   privateKey: string;
@@ -13,15 +15,21 @@ export interface SkillcoinConfig {
   ipfsGateway: string;
   skillsDir: string;
   network: string;
+  aiProvider: AiProvider;
+  aiApiKey: string;
+  aiModel: string;
 }
 
 const DEFAULT_CONFIG: SkillcoinConfig = {
   wallet: "",
   privateKey: "",
   apiBase: "http://localhost:3001",
-  ipfsGateway: "https://gateway.lighthouse.storage/ipfs",
+  ipfsGateway: "https://ipfs.io/ipfs",
   skillsDir: SKILLS_DIR,
   network: "calibration",
+  aiProvider: "gemini",
+  aiApiKey: "",
+  aiModel: "",
 };
 
 /**

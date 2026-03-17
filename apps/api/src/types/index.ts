@@ -80,6 +80,7 @@ export interface UploadResult {
   size: number;
   uploadedAt: Date;
   gatewayUrl: string;
+  storageType: "filecoin" | "local";
 }
 
 export interface DealResult {

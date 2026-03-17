@@ -1,8 +1,10 @@
 import { Hono } from "hono";
 import { SkillService } from "../services/skill";
 import { SkillQuerySchema, SearchQuerySchema } from "../types";
+import { type AuthUser } from "../middleware/auth";
 
-const skills = new Hono();
+type Variables = { user: AuthUser };
+const skills = new Hono<{ Variables: Variables }>();
 
 /**
  * GET /api/skills - List skills with pagination and filters

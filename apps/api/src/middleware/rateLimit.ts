@@ -70,3 +70,9 @@ export const downloadRateLimit = rateLimiter({
   windowMs: 60 * 60 * 1000, // 1 hour
   keyPrefix: "download",
 });
+
+export const generateRateLimit = rateLimiter({
+  maxRequests: 20,
+  windowMs: 60 * 60 * 1000, // 1 hour
+  keyPrefix: "generate",
+});

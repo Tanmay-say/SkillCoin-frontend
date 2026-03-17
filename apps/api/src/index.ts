@@ -71,20 +71,32 @@ app.get("/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// ─── Local Uploads (Lighthouse fallback) ───────────────
+// ─── Local Uploads (Filecoin/Synapse local fallback) ───────────────
 
 import { serveStatic } from "@hono/node-server/serve-static";
 import path from "path";
 import fs from "fs";
 
 // Serve local fallback upload files at /uploads/*
+// Supports exact filename match and CID-prefix lookup for backwards compat.
 app.get("/uploads/:filename", async (c) => {
-  const filename = c.req.param("filename");
-  const filePath = path.resolve(process.cwd(), "uploads", filename);
+  const requested = c.req.param("filename");
+  const uploadsDir = path.resolve(process.cwd(), "uploads");
+
+  let filePath = path.resolve(uploadsDir, requested);
 
   // Security: prevent path traversal
-  if (!filePath.startsWith(path.resolve(process.cwd(), "uploads"))) {
+  if (!filePath.startsWith(uploadsDir)) {
     return c.json({ error: "Invalid path" }, 400);
+  }
+
+  // If exact file doesn't exist, try CID-prefix lookup (handles old `cid_name` and new `cid.ext` formats)
+  if (!fs.existsSync(filePath) && requested.startsWith("local_")) {
+    const files = fs.readdirSync(uploadsDir);
+    const match = files.find((f) => f.startsWith(requested));
+    if (match) {
+      filePath = path.resolve(uploadsDir, match);
+    }
   }
 
   if (!fs.existsSync(filePath)) {
@@ -92,8 +104,15 @@ app.get("/uploads/:filename", async (c) => {
   }
 
   const fileBuffer = fs.readFileSync(filePath);
-  c.header("Content-Type", "application/zip");
-  c.header("Content-Disposition", `attachment; filename="${filename}"`);
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    ".md": "text/markdown",
+    ".zip": "application/zip",
+    ".json": "application/json",
+    ".txt": "text/plain",
+  };
+  c.header("Content-Type", mimeTypes[ext] || "application/octet-stream");
+  c.header("Content-Disposition", `attachment; filename="${path.basename(filePath)}"`);
   return c.body(fileBuffer);
 });
 

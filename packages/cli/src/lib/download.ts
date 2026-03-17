@@ -1,21 +1,22 @@
 import * as fs from "fs";
 import * as path from "path";
-import { getSkillsDir } from "./config";
+import { getSkillsDir, readConfig } from "./config";
 
-/**
- * Multi-gateway download from IPFS using CID
- * Tries Lighthouse first, then fallback gateways
- */
 const GATEWAYS = [
-  "https://gateway.lighthouse.storage/ipfs",
   "https://ipfs.io/ipfs",
+  "https://w3s.link/ipfs",
   "https://cloudflare-ipfs.com/ipfs",
 ];
 
 /**
- * Download a file from IPFS by CID, trying multiple gateways
+ * Download a file by CID. Local CIDs (local_*) are fetched from the API server;
+ * real IPFS CIDs are fetched through public gateways with fallback.
  */
 export async function downloadFromCID(cid: string): Promise<Buffer> {
+  if (cid.startsWith("local_")) {
+    return downloadFromLocalAPI(cid);
+  }
+
   let lastError: Error | null = null;
 
   for (const gateway of GATEWAYS) {
@@ -40,6 +41,21 @@ export async function downloadFromCID(cid: string): Promise<Buffer> {
   throw new Error(
     `Failed to download CID ${cid} from all gateways: ${lastError?.message}`
   );
+}
+
+async function downloadFromLocalAPI(cid: string): Promise<Buffer> {
+  const config = readConfig();
+  const baseUrl = config.apiBase || "http://localhost:3001";
+
+  const response = await fetch(`${baseUrl}/uploads/${cid}`, {
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Local download failed: HTTP ${response.status} from API server`);
+  }
+
+  return Buffer.from(await response.arrayBuffer());
 }
 
 /**

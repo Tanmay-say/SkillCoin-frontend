@@ -1,7 +1,14 @@
 import { defineConfig } from "tsup";
 
+const EXTERNAL = [
+  "filecoin-pin",
+  "@google/generative-ai",
+  "@filoz/synapse-sdk",
+  "pino",
+  "ethers",
+];
+
 export default defineConfig([
-  // CLI binary entry — needs shebang
   {
     entry: { "bin/skillcoin": "src/bin/skillcoin.ts" },
     format: ["cjs"],
@@ -10,13 +17,14 @@ export default defineConfig([
     banner: { js: "#!/usr/bin/env node" },
     target: "node18",
     outDir: "dist",
+    external: EXTERNAL,
   },
-  // Library entry — no shebang
   {
     entry: { index: "src/index.ts" },
     format: ["cjs"],
     splitting: false,
     target: "node18",
     outDir: "dist",
+    external: EXTERNAL,
   },
 ]);

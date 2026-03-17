@@ -19,7 +19,7 @@ export default function FilecoinProofBadge({
   className = "",
 }: FilecoinProofBadgeProps) {
   if (!dataSetId) {
-    // Fallback for old skills stored on Lighthouse (no dataSetId)
+    // Fallback for older skills not yet using Synapse SDK (no dataSetId)
     return (
       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-white/5 text-text-muted border border-white/8 ${className}`}>
         <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />
