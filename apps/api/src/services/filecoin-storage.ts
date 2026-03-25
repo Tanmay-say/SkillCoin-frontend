@@ -25,11 +25,78 @@ export async function getSynapse(): Promise<any> {
 
   const hexKey = (key.startsWith("0x") ? key : `0x${key}`) as `0x${string}`;
 
-  const { privateKeyToAccount } = await import("viem/accounts" as any);
+  // #region agent log – H1/H2/H3: diagnose module resolution on Vercel
+  const fs = require("fs");
+  const path = require("path");
+  const diagPaths = [
+    path.resolve(__dirname, "../../node_modules/viem"),
+    path.resolve(__dirname, "../../../node_modules/viem"),
+    path.resolve(__dirname, "../../../../node_modules/viem"),
+    "/var/task/node_modules/viem",
+    "/var/task/apps/api/node_modules/viem",
+    "/var/task/apps/node_modules/viem",
+  ];
+  const diagResults: Record<string, boolean> = {};
+  for (const p of diagPaths) {
+    diagResults[p] = fs.existsSync(p);
+  }
+  console.log(`[DEBUG-b98ebe] viem paths: ${JSON.stringify(diagResults)}`);
+
+  const viemAccountsPaths = [
+    path.resolve(__dirname, "../../node_modules/viem/accounts"),
+    path.resolve(__dirname, "../../node_modules/viem/_cjs/accounts"),
+    "/var/task/node_modules/viem/package.json",
+    "/var/task/apps/api/node_modules/viem/package.json",
+  ];
+  const viemAccDiag: Record<string, any> = {};
+  for (const p of viemAccountsPaths) {
+    viemAccDiag[p] = fs.existsSync(p);
+    if (p.endsWith("package.json") && fs.existsSync(p)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(p, "utf8"));
+        viemAccDiag[p + ":exports"] = pkg.exports?.["./accounts"] ?? "NOT_FOUND";
+      } catch {}
+    }
+  }
+  console.log(`[DEBUG-b98ebe] viem/accounts paths: ${JSON.stringify(viemAccDiag)}`);
+
+  let pnpmViemDir = "NOT_FOUND";
+  const pnpmBase = path.resolve(__dirname, "../../../../node_modules/.pnpm");
+  if (fs.existsSync(pnpmBase)) {
+    try {
+      const dirs = fs.readdirSync(pnpmBase).filter((d: string) => d.startsWith("viem"));
+      pnpmViemDir = JSON.stringify(dirs.slice(0, 5));
+    } catch {}
+  }
+  console.log(`[DEBUG-b98ebe] .pnpm viem dirs: ${pnpmViemDir}`);
+  // #endregion
+
+  // #region agent log – H1: try import, capture detailed error
+  let privateKeyToAccount: any;
+  try {
+    const viemAccMod = await import("viem/accounts" as any);
+    privateKeyToAccount = viemAccMod.privateKeyToAccount;
+    console.log(`[DEBUG-b98ebe] H1: viem/accounts import SUCCESS`);
+  } catch (e: any) {
+    console.log(`[DEBUG-b98ebe] H1: viem/accounts import FAILED: ${e.message}`);
+    console.log(`[DEBUG-b98ebe] H1: error code: ${e.code}, require stack: ${JSON.stringify(e.requireStack)}`);
+    throw new Error(`Filecoin init failed: cannot load viem/accounts – ${e.message}`);
+  }
+  // #endregion
+
   const account = privateKeyToAccount(hexKey);
 
-  const mod = await import("@filoz/synapse-sdk" as any);
-  const { Synapse } = mod;
+  // #region agent log – H2: try synapse-sdk import
+  let Synapse: any;
+  try {
+    const mod = await import("@filoz/synapse-sdk" as any);
+    Synapse = mod.Synapse;
+    console.log(`[DEBUG-b98ebe] H2: synapse-sdk import SUCCESS`);
+  } catch (e: any) {
+    console.log(`[DEBUG-b98ebe] H2: synapse-sdk import FAILED: ${e.message}`);
+    throw new Error(`Filecoin init failed: cannot load @filoz/synapse-sdk – ${e.message}`);
+  }
+  // #endregion
 
   _synapse = Synapse.create({
     account,
