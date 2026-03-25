@@ -1,5 +1,4 @@
 import prisma from "../db/client";
-import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 // HIGH-BUG-02: Strict schema for update operations — only whitelisted fields
@@ -78,7 +77,7 @@ export class SkillService {
     const limit = Math.min(options.limit || 20, 100); // DB-03: Cap limit in service layer
     const skip = (page - 1) * limit;
 
-    const where: Prisma.SkillWhereInput = {
+    const where: Record<string, any> = {
       published: true,
     };
 
@@ -90,7 +89,7 @@ export class SkillService {
       where.tags = { hasSome: options.tags.split(",") };
     }
 
-    let orderBy: Prisma.SkillOrderByWithRelationInput = { createdAt: "desc" };
+    let orderBy: Record<string, string> = { createdAt: "desc" };
     switch (options.sort) {
       case "popular":
         orderBy = { downloads: "desc" };
@@ -153,7 +152,7 @@ export class SkillService {
     const cappedLimit = Math.min(limit, 100); // DB-03: cap in service layer
     // MED-BUG-01 FIX: removed unused `searchTerm` variable
 
-    const where: Prisma.SkillWhereInput = {
+    const where: Record<string, any> = {
       published: true,
       OR: [
         { name: { contains: query, mode: "insensitive" } },

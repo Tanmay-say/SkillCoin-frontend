@@ -10,15 +10,17 @@ const auth = new Hono();
 // This does NOT survive server restarts or work across multiple instances
 const nonceStore = new Map<string, { nonce: string; expiresAt: number }>();
 
-// Periodically clean expired nonces (every 5 minutes)
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of nonceStore.entries()) {
-    if (value.expiresAt < now) {
-      nonceStore.delete(key);
+// Periodically clean expired nonces (skip in serverless — each invocation is fresh)
+if (!process.env.VERCEL) {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, value] of nonceStore.entries()) {
+      if (value.expiresAt < now) {
+        nonceStore.delete(key);
+      }
     }
-  }
-}, 5 * 60 * 1000);
+  }, 5 * 60 * 1000);
+}
 
 /**
  * GET /api/auth/nonce?address=0x...
@@ -158,7 +160,7 @@ auth.get("/users/:address", async (c) => {
         skills,
         stats: {
           totalSkills,
-          totalDownloads: skills.reduce((sum, s) => sum + s.downloads, 0),
+          totalDownloads: skills.reduce((sum: number, s: any) => sum + s.downloads, 0),
         },
         pagination: {
           page,

@@ -149,7 +149,7 @@ export class FilecoinStorageService {
     if (cid.startsWith("local_")) return true;
     try {
       const response = await fetch(`${IPFS_GATEWAY}/${cid}`, { method: "HEAD" });
-      return response.ok;
+      return response.status >= 200 && response.status < 300;
     } catch {
       return false;
     }

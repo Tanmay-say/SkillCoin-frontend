@@ -1,17 +1,19 @@
 import { Hono } from "hono";
 import jwt, { type SignOptions } from "jsonwebtoken";
 
-// CRIT-01: Throw if JWT_SECRET is missing — never fall back to a hardcoded secret
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error("FATAL: JWT_SECRET environment variable is required. Set it in your .env file.");
+// Lazy accessor so the module can load before env vars are populated (Vercel serverless)
+function getSecret(): string {
+  const s = process.env.JWT_SECRET;
+  if (!s) {
+    throw new Error("FATAL: JWT_SECRET environment variable is required. Set it in your .env file.");
+  }
+  return s;
 }
-const SECRET: string = JWT_SECRET;
 
-// HIGH-04: Validate JWT expiry — max 7 days, default 24h
-const RAW_EXPIRY = process.env.JWT_EXPIRY || "24h";
-const VALID_EXPIRY_PATTERN = /^\d+[smhd]$/;
-const JWT_EXPIRY = VALID_EXPIRY_PATTERN.test(RAW_EXPIRY) ? RAW_EXPIRY : "24h";
+function getExpiry(): string {
+  const raw = process.env.JWT_EXPIRY || "24h";
+  return /^\d+[smhd]$/.test(raw) ? raw : "24h";
+}
 
 export interface AuthUser {
   userId: string;
@@ -33,7 +35,7 @@ export function authMiddleware() {
     const token = authHeader.replace("Bearer ", "");
 
     try {
-      const decoded = jwt.verify(token, SECRET) as {
+      const decoded = jwt.verify(token, getSecret()) as {
         userId: string;
         address: string;
       };
@@ -56,7 +58,7 @@ export function optionalAuth() {
     if (authHeader?.startsWith("Bearer ")) {
       const token = authHeader.replace("Bearer ", "");
       try {
-        const decoded = jwt.verify(token, SECRET) as {
+        const decoded = jwt.verify(token, getSecret()) as {
           userId: string;
           address: string;
         };
@@ -74,8 +76,8 @@ export function optionalAuth() {
  * Generate a session JWT
  */
 export function generateToken(userId: string, address: string): string {
-  const opts: SignOptions = { expiresIn: JWT_EXPIRY as any };
-  return jwt.sign({ userId, address }, SECRET, opts);
+  const opts: SignOptions = { expiresIn: getExpiry() as any };
+  return jwt.sign({ userId, address }, getSecret(), opts);
 }
 
 /**
@@ -87,5 +89,5 @@ export function generateDownloadToken(
   cid: string
 ): string {
   const opts: SignOptions = { expiresIn: "5m" };
-  return jwt.sign({ skillId, userId, cid, purpose: "download" }, SECRET, opts);
+  return jwt.sign({ skillId, userId, cid, purpose: "download" }, getSecret(), opts);
 }

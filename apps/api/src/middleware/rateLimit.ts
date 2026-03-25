@@ -10,13 +10,15 @@ interface RateLimitEntry {
 
 const store = new Map<string, RateLimitEntry>();
 
-// Clean up expired entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of store.entries()) {
-    if (entry.resetAt < now) store.delete(key);
-  }
-}, 5 * 60 * 1000);
+// Clean up expired entries every 5 minutes (skip in serverless — each invocation is fresh)
+if (!process.env.VERCEL) {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of store.entries()) {
+      if (entry.resetAt < now) store.delete(key);
+    }
+  }, 5 * 60 * 1000);
+}
 
 export function rateLimiter(options: {
   maxRequests: number;

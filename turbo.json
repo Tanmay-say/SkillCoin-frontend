@@ -1,6 +1,29 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["**/.env.*local"],
+  "globalPassThroughEnv": [
+    "DATABASE_URL",
+    "DIRECT_URL",
+    "FILECOIN_PRIVATE_KEY",
+    "FILECOIN_WALLET_ADDRESS",
+    "FILECOIN_RPC_URL",
+    "FILECOIN_NETWORK",
+    "SKILL_REGISTRY_ADDRESS",
+    "SKILL_LICENSE_NFT_ADDRESS",
+    "AGENT_REGISTRY_ADDRESS",
+    "BASE_SEPOLIA_RPC",
+    "GEMINI_API_KEY",
+    "ADMIN_VAULT_ADDRESS",
+    "X402_PAYMENT_AMOUNT",
+    "X402_PAYMENT_CURRENCY",
+    "PAYMENT_VERIFY_RPC_URL",
+    "JWT_SECRET",
+    "JWT_EXPIRY",
+    "PORT",
+    "NODE_ENV",
+    "CORS_ORIGIN",
+    "VERCEL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
