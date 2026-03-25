@@ -1,8 +1,37 @@
 import type { UploadResult } from "../types";
 
 const IPFS_GATEWAY = "https://ipfs.io/ipfs";
+const DEBUG_ENDPOINT = "http://127.0.0.1:7246/ingest/95cbc5a9-44a7-4444-a8b3-3705dcb24c37";
+const DEBUG_SESSION_ID = "b98ebe";
 
 let _synapse: any = null;
+
+// #region agent log
+function emitDebug(
+  runId: string,
+  hypothesisId: string,
+  location: string,
+  message: string,
+  data: Record<string, unknown> = {}
+): void {
+  fetch(DEBUG_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": DEBUG_SESSION_ID,
+    },
+    body: JSON.stringify({
+      sessionId: DEBUG_SESSION_ID,
+      runId,
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+}
+// #endregion
 
 export class FilecoinNotConfiguredError extends Error {
   constructor() {
@@ -121,6 +150,7 @@ export class FilecoinStorageService {
     buffer: Buffer,
     filename: string
   ): Promise<FilecoinUploadResult> {
+    const runId = `upload-${Date.now()}`;
     if (!hasFilecoinKey()) {
       throw new FilecoinNotConfiguredError();
     }
@@ -143,7 +173,99 @@ export class FilecoinStorageService {
     }
     // #endregion
 
-    const result = await synapse.storage.upload(new Uint8Array(buffer));
+    // #region agent log – H6/H7/H8: phase-level upload instrumentation
+    emitDebug(runId, "H6", "filecoin-storage.ts:upload:start", "upload start", {
+      filename,
+      bytes: buffer.length,
+    });
+    let result: any;
+    try {
+      result = await synapse.storage.upload(new Uint8Array(buffer), {
+        callbacks: {
+          onProgress: (bytesUploaded: number) => {
+            emitDebug(runId, "H6", "filecoin-storage.ts:upload:onProgress", "bytes uploaded", {
+              bytesUploaded,
+            });
+          },
+          onStored: (providerId: bigint, pieceCid: any) => {
+            emitDebug(runId, "H6", "filecoin-storage.ts:upload:onStored", "piece stored", {
+              providerId: providerId.toString(),
+              pieceCid: pieceCid?.toString?.() ?? String(pieceCid),
+            });
+          },
+          onPiecesAdded: (transaction: string, providerId: bigint, pieces: { pieceCid: any }[]) => {
+            emitDebug(
+              runId,
+              "H8",
+              "filecoin-storage.ts:upload:onPiecesAdded",
+              "pieces added on-chain tx submitted",
+              {
+                transaction,
+                providerId: providerId.toString(),
+                piecesCount: pieces.length,
+              }
+            );
+          },
+          onPiecesConfirmed: (dataSetId: bigint, providerId: bigint, pieces: { pieceCid: any }[]) => {
+            emitDebug(
+              runId,
+              "H8",
+              "filecoin-storage.ts:upload:onPiecesConfirmed",
+              "pieces confirmed on-chain",
+              {
+                dataSetId: dataSetId.toString(),
+                providerId: providerId.toString(),
+                piecesCount: pieces.length,
+              }
+            );
+          },
+          onPullProgress: (providerId: bigint, pieceCid: any, status: string) => {
+            emitDebug(
+              runId,
+              "H7",
+              "filecoin-storage.ts:upload:onPullProgress",
+              "provider pull progress",
+              {
+                providerId: providerId.toString(),
+                pieceCid: pieceCid?.toString?.() ?? String(pieceCid),
+                status,
+              }
+            );
+          },
+          onCopyComplete: (providerId: bigint, pieceCid: any) => {
+            emitDebug(
+              runId,
+              "H7",
+              "filecoin-storage.ts:upload:onCopyComplete",
+              "copy complete",
+              {
+                providerId: providerId.toString(),
+                pieceCid: pieceCid?.toString?.() ?? String(pieceCid),
+              }
+            );
+          },
+          onCopyFailed: (providerId: bigint, pieceCid: any, error: Error) => {
+            emitDebug(runId, "H7", "filecoin-storage.ts:upload:onCopyFailed", "copy failed", {
+              providerId: providerId.toString(),
+              pieceCid: pieceCid?.toString?.() ?? String(pieceCid),
+              error: error?.message ?? "unknown",
+            });
+          },
+        },
+      });
+      emitDebug(runId, "H6", "filecoin-storage.ts:upload:done", "upload finished", {
+        hasResult: true,
+      });
+    } catch (e: any) {
+      emitDebug(runId, "H6", "filecoin-storage.ts:upload:error", "upload failed", {
+        error: e?.message ?? "unknown",
+        shortMessage: e?.shortMessage ?? null,
+        providerId: e?.providerId ?? null,
+        endpoint: e?.endpoint ?? null,
+      });
+      throw e;
+    }
+    // #endregion
 
     const pieceCid = result.pieceCid?.toString() || "";
     const primaryCopy = result.copies?.[0];
