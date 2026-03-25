@@ -15,19 +15,20 @@ export class SynapseService {
 
     try {
       const synapse = await getSynapse();
-      const datasets = await synapse.storage.listDataSets();
+      const datasets = await synapse.storage.findDataSets();
 
       const matching = datasets.find((ds: any) =>
-        ds.pieces?.some((p: any) => p.rootCID?.toString() === cid)
+        String(ds.dataSetId) === cid || ds.pieces?.some((p: any) => p.pieceCid?.toString() === cid)
       );
 
       if (matching) {
+        const dsId = Number(matching.dataSetId || matching.clientDataSetId);
         return {
-          dealId: `dataset-${matching.id}`,
+          dealId: `dataset-${dsId}`,
           cid,
           provider: "filecoin-calibration",
-          status: matching.status === "live" ? "active" : "pending",
-          explorerUrl: `${PDP_EXPLORER}/${matching.id}`,
+          status: matching.isLive ? "active" : "pending",
+          explorerUrl: `${PDP_EXPLORER}/${dsId}`,
         };
       }
 
@@ -55,13 +56,13 @@ export class SynapseService {
 
     try {
       const synapse = await getSynapse();
-      const datasets = await synapse.storage.listDataSets();
-      const ds = datasets.find((d: any) => d.id === datasetId);
+      const datasets = await synapse.storage.findDataSets();
+      const ds = datasets.find((d: any) => Number(d.dataSetId) === datasetId);
 
       return {
-        active: ds?.status === "live",
+        active: !!ds?.isLive,
         provider: "filecoin-calibration",
-        status: ds?.status ?? "unknown",
+        status: ds?.isLive ? "live" : "unknown",
       };
     } catch {
       return { active: false, provider: "filecoin-calibration", status: "error" };
