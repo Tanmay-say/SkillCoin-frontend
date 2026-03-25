@@ -14,6 +14,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "lint": "tsc --noEmit",
     "prepublishOnly": "npm run build",
     "start": "node dist/bin/skillcoin.js"
   },
