@@ -1,5 +1,9 @@
 import { Hono } from "hono";
-import { FilecoinStorageService, FilecoinNotConfiguredError } from "../services/filecoin-storage";
+import {
+  FilecoinStorageService,
+  FilecoinNotConfiguredError,
+  FilecoinInputTooSmallError,
+} from "../services/filecoin-storage";
 import { SynapseService } from "../services/synapse";
 import { SkillService } from "../services/skill";
 import { UploadMetadataSchema } from "../types";
@@ -165,6 +169,9 @@ upload.post("/", async (c) => {
         },
         503
       );
+    }
+    if (error instanceof FilecoinInputTooSmallError) {
+      return c.json({ success: false, error: error.message }, 400);
     }
 
     // #region agent log – surface full error for debugging

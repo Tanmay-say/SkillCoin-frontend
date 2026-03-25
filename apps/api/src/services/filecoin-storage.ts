@@ -3,6 +3,7 @@ import type { UploadResult } from "../types";
 const IPFS_GATEWAY = "https://ipfs.io/ipfs";
 const DEBUG_ENDPOINT = "http://127.0.0.1:7246/ingest/95cbc5a9-44a7-4444-a8b3-3705dcb24c37";
 const DEBUG_SESSION_ID = "b98ebe";
+const MIN_FILECOIN_UPLOAD_BYTES = 127;
 
 let _synapse: any = null;
 
@@ -40,6 +41,13 @@ export class FilecoinNotConfiguredError extends Error {
   constructor() {
     super("FILECOIN_PRIVATE_KEY is not set — Filecoin storage unavailable");
     this.name = "FilecoinNotConfiguredError";
+  }
+}
+
+export class FilecoinInputTooSmallError extends Error {
+  constructor(actualBytes: number, minimumBytes: number = MIN_FILECOIN_UPLOAD_BYTES) {
+    super(`File too small for Filecoin storage: ${actualBytes} bytes (minimum ${minimumBytes} bytes)`);
+    this.name = "FilecoinInputTooSmallError";
   }
 }
 
@@ -156,6 +164,15 @@ export class FilecoinStorageService {
     const runId = `upload-${Date.now()}`;
     if (!hasFilecoinKey()) {
       throw new FilecoinNotConfiguredError();
+    }
+    if (buffer.length < MIN_FILECOIN_UPLOAD_BYTES) {
+      // #region agent log
+      emitDebug(runId, "H9", "filecoin-storage.ts:upload:validate-size", "file below minimum size", {
+        actualBytes: buffer.length,
+        minimumBytes: MIN_FILECOIN_UPLOAD_BYTES,
+      });
+      // #endregion
+      throw new FilecoinInputTooSmallError(buffer.length);
     }
 
     console.log(`[Filecoin] Uploading ${filename} (${buffer.length} bytes) via Synapse SDK...`);
