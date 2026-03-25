@@ -174,9 +174,6 @@ upload.post("/", async (c) => {
       return c.json({ success: false, error: error.message }, 400);
     }
 
-    // #region agent log – surface full error for debugging
-    console.log(`[DEBUG-b98ebe] upload error: ${error.message}`);
-    // #endregion
     return c.json({ success: false, error: error.message }, 500);
   }
 });
