@@ -128,6 +128,21 @@ export class FilecoinStorageService {
     console.log(`[Filecoin] Uploading ${filename} (${buffer.length} bytes) via Synapse SDK...`);
     const synapse = await getSynapse();
 
+    // #region agent log – H5: check allowance and prepare funds before upload
+    const dataSize = BigInt(buffer.length);
+    console.log(`[DEBUG-b98ebe] H5: calling storage.prepare with dataSize=${dataSize}`);
+    const prep = await synapse.storage.prepare({ dataSize });
+    console.log(`[DEBUG-b98ebe] H5: prepare result – transaction=${prep.transaction ? 'NEEDED' : 'null'}, depositAmount=${prep.transaction?.depositAmount}, includesApproval=${prep.transaction?.includesApproval}`);
+
+    if (prep.transaction) {
+      console.log(`[DEBUG-b98ebe] H5: executing prepare transaction (deposit + approval)...`);
+      const txResult = await prep.transaction.execute({
+        onHash: (hash: string) => console.log(`[Filecoin] Prepare tx: ${hash}`),
+      });
+      console.log(`[DEBUG-b98ebe] H5: prepare tx done – hash=${txResult.hash}`);
+    }
+    // #endregion
+
     const result = await synapse.storage.upload(new Uint8Array(buffer));
 
     const pieceCid = result.pieceCid?.toString() || "";
