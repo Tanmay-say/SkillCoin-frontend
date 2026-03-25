@@ -157,12 +157,11 @@ app.onError((err, c) => {
   );
 });
 
-// ─── Start Server ──────────────────────────────────────────
+// ─── Start Server (local dev only — skipped on Vercel) ─────
 
 const port = parseInt(process.env.PORT || "3001");
 
 async function start() {
-  // DEV-05: Verify database connection before starting
   try {
     await prisma.$connect();
     console.log("[DB] ✓ Database connected");
@@ -185,6 +184,8 @@ async function start() {
   serve({ fetch: app.fetch, port });
 }
 
-start();
+if (!process.env.VERCEL) {
+  start();
+}
 
 export default app;

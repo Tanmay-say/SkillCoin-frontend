@@ -4,7 +4,6 @@ const EXTERNAL = [
   "filecoin-pin",
   "@google/generative-ai",
   "@filoz/synapse-sdk",
-  "pino",
   "ethers",
 ];
 

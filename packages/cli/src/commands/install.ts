@@ -50,8 +50,13 @@ export function installCommand(program: Command) {
           )
         );
       } catch (error: any) {
-        spinner.fail(chalk.red(`Skill '${name}' not found on marketplace`));
+        spinner.fail(chalk.red(`Skill '${name}' not found`));
         console.log(chalk.dim(`  Error: ${error.message}`));
+        if (error.message.includes("fetch") || error.message.includes("ECONNREFUSED")) {
+          console.log();
+          console.log(chalk.yellow("  Could not connect to the Skillcoin API."));
+          console.log(chalk.dim("  Set your API URL: skillcoin config --api-base https://your-api.vercel.app"));
+        }
         console.log();
         return;
       }

@@ -1,170 +1,249 @@
-# ⚡ Skillcoin CLI
+# Skillcoin CLI
 
-**The npm for AI Agent Skills.** A decentralized package manager built on Filecoin/IPFS that allows you to discover, install, and publish AI skills permanently.
+**The npm for AI Agent Skills.** A decentralized package manager built on Filecoin/IPFS that lets you discover, install, publish, and generate AI skills — stored permanently on-chain.
 
 [![npm version](https://img.shields.io/npm/v/skillcoin.svg)](https://www.npmjs.com/package/skillcoin)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-You don't need to install anything globally. You can run Skillcoin commands directly using `npx`:
+Run commands directly with `npx` — no global install needed:
 
 ```bash
-# Browse the marketplace
-npx skillcoin search
-
-# Install a skill
+npx skillcoin search seo
 npx skillcoin install seo-blog-writer
 ```
 
-If you prefer to install it globally:
+Or install globally:
+
 ```bash
 npm install -g skillcoin
 ```
 
 ---
 
-## 📖 Command Reference
+## Commands
 
 ### `skillcoin search [query]`
+
 Search the decentralized marketplace for AI skills.
 
-```bash
-$ npx skillcoin search "seo"
+```
+$ skillcoin search seo
 
-  🔍 Skillcoin Marketplace
+  Skillcoin Marketplace
   ─────────────────────────
-  ✔ 4 skill(s) on marketplace
+  2 skill(s) on marketplace
 
-  Name                     Version   Category    Price       Downloads 
+  Name                     Version   Category    Price       Downloads
   ────────────────────────────────────────────────────────────────────────
-  seo-blog-writer          1.0.0     marketing   Free        120       
-  example-seo              1.0.0     coding      0.5 tFIL    45        
+  seo-blog-writer          1.0.0     marketing   0.5 USDC    12
+  example-seo              1.0.0     coding      0.5 USDC    3
 ```
 
 ### `skillcoin install <name>`
-Download and install a skill directly from IPFS to your local `~/.skillcoin/skills/` directory.
 
-```bash
-$ npx skillcoin install seo-blog-writer
+Download and install a skill from Filecoin/IPFS to `~/.skillcoin/skills/`.
 
-  ⚡ Skillcoin Installer
+```
+$ skillcoin install seo-blog-writer
+
+  Skillcoin Installer
   ─────────────────────────
-  ✔ Found seo-blog-writer v1.0.0
-  ✔ Downloaded from IPFS/Filecoin...
-  ✔ Skill installed
+  Found seo-blog-writer v1.0.0
+  Downloaded 4.2 KB from IPFS/Filecoin
 
-  ✓ Installed seo-blog-writer@1.0.0
-    CID:  QmZiZEVNbFGwpBUGPDCS1YMKNba6W1AHwbzdC4M3hudStJ
-    Path: /Users/you/.skillcoin/skills/seo-blog-writer
+  Installed seo-blog-writer@1.0.0
+    Path:    ~/.skillcoin/skills/seo-blog-writer
+    CID:     QmZiZEVNbFGwpBUGPDCS1YMKNba6W1AHwbzdC4M3hudStJ
+    Storage: Filecoin (IPFS)
+    IPFS:    https://ipfs.io/ipfs/QmZiZEVN...
 ```
 
-#### 💳 Paid Skills
-If a skill has a price, the CLI will automatically launch a secure browser payment page (`localhost:7402`).
-1. Connect your **MetaMask** wallet.
-2. The page auto-switches to the **Filecoin Calibration** testnet.
-3. Pay the exact amount in native `tFIL` (Test FIL).
-4. Once the transaction confirms, the CLI automatically resumes the IPFS download.
-
-*(Get free `tFIL` for testing from the [Calibration Faucet](https://faucet.calibnet.chainsafe-fil.io/))*
-
 Options:
-- `--force`, `-f`: Force reinstall even if already installed.
-- `--no-payment`: Skip the payment prompt (useful for testing or if you've already paid).
+- `--force`, `-f` — Force reinstall even if already installed
+- `--no-payment` — Skip the payment prompt (free skills only)
+
+#### Paid Skills
+
+If a skill has a price, the CLI opens a browser payment page at `localhost:7402`. Connect MetaMask, pay in the listed currency on the correct network, and the CLI resumes automatically after confirmation.
 
 ### `skillcoin publish <file.md>`
-Publish your own AI skill to the decentralized marketplace. The file is uploaded to IPFS via Lighthouse, meaning it is **uncensorable and permanently available**.
 
-```bash
-$ npx skillcoin publish my-awesome-skill.md --price 1.5 --category coding
+Publish a `.md` skill file to the marketplace. The file is uploaded to Filecoin via the Synapse SDK and stored permanently with IPFS-compatible CIDs.
 
-  📥 Skillcoin Publisher
+```
+$ skillcoin publish my-skill.md --price 0.5 --category coding
+
+  Skillcoin Publisher
   ─────────────────────────
-  File:     my-awesome-skill.md (4.2 KB)
-  Skill:    my-awesome-skill
+  File:     my-skill.md (4.2 KB)
+  Skill:    my-skill
   Version:  1.0.0
-  Price:    1.5 tFIL
-  Category: coding
+  Price:    0.5 USDC
 
-  ✔ Published to Filecoin!
+  Skill stored on Filecoin permanently
 
-  ✓ Skill published successfully!
-  CID:      QmYourNewSkillIPFSCIDHashHere...
-  Deal ID:  1234567
+  Storage Details
+  ───────────────────────────────────
+  CID:         QmYourRootCIDHere...
+  Storage:     filecoin
+  Skill ID:    abc123
+
+  Access URLs (use any to download)
+  ───────────────────────────────────
+  IPFS     https://ipfs.io/ipfs/QmYour...
+  W3S      https://w3s.link/ipfs/QmYour...
+  CF       https://cloudflare-ipfs.com/ipfs/QmYour...
+
+  Install:  skillcoin install my-skill
 ```
 
 Options:
-- `-n, --name <name>`: Custom skill name (defaults to the filename)
-- `-d, --desc <description>`: Skill description
-- `-c, --category <category>`: Category (e.g., coding, marketing)
-- `-p, --price <price>`: Price in tFIL (default: 0.5)
-- `-t, --tags <tags>`: Comma-separated tags
-- `-v, --version <version>`: Version string (default: 1.0.0)
+- `-n, --name <name>` — Custom skill name (defaults to filename)
+- `-d, --desc <description>` — Skill description
+- `-c, --category <category>` — Category (coding, marketing, research, etc.)
+- `-p, --price <price>` — Price in USDC (default: 0.5)
+- `-t, --tags <tags>` — Comma-separated tags
+- `-v, --version <version>` — Version string (default: 1.0.0)
+- `-s, --storage <method>` — `api` (default) or `filecoin-pin` for direct Filecoin upload
 
 ### `skillcoin list`
-View all skills currently installed on your local machine.
 
-```bash
-$ npx skillcoin list
+View all locally installed skills.
 
-  📦 Installed Skills
+```
+$ skillcoin list
+
+  Installed Skills
   ─────────────────────────
   Name                     Version     Category       Installed
   ─────────────────────────────────────────────────────────────────
   seo-blog-writer          1.0.0       marketing      3/11/2026
+  data-visualizer          1.0.0       analytics      3/15/2026
+
+  2 skill(s) installed
 ```
+
+### `skillcoin chat`
+
+Interactive AI chat REPL for skill development. Supports streaming responses, slash commands, and inline skill generation.
+
+```
+$ skillcoin chat
+
+  Skillcoin v0.3.0  |  npm for AI Agent Skills
+
+  Connected to gemini (gemini-2.0-flash)
+
+  > Create a skill for writing technical docs
+  ...AI streams response...
+
+  /generate   Generate a new AI skill from description
+  /publish    Publish current skill to marketplace
+  /install    Install a skill by name
+  /list       Browse marketplace skills
+  /status     Show wallet and config status
+  /help       Show all commands
+  /exit       Exit the session
+```
+
+Requires an AI API key. Configure with:
+
+```bash
+skillcoin config --provider gemini --ai-key YOUR_KEY
+```
+
+Supported providers: `gemini`, `openai`, `groq`
+
+### `skillcoin agent`
+
+Create, manage, and run AI agents with custom skill configurations.
+
+```bash
+skillcoin agent create     # Interactive agent creation wizard
+skillcoin agent list       # List saved agents
+skillcoin agent run <name> # Start an agent chat session
+skillcoin agent delete <name>
+```
+
+### `skillcoin register-agent`
+
+Register SkillCoin as an ERC-8004 AI agent on Base Sepolia. Uploads an agent card to Filecoin via filecoin-pin and mints an NFT on the on-chain registry.
+
+```bash
+skillcoin register-agent
+```
+
+Requires `FILECOIN_PRIVATE_KEY` and `BASE_SEPOLIA_RPC` environment variables.
 
 ### `skillcoin config`
-Manage your local CLI configuration (stored in `~/.skillcoin/config.json`).
+
+View or update CLI configuration (stored in `~/.skillcoin/config.json`).
 
 ```bash
-# View current config
-$ npx skillcoin config
-
-# Set custom API or IPFS gateway
-$ npx skillcoin config --gateway "https://ipfs.io/ipfs" --network mainnet
+skillcoin config                                    # View current config
+skillcoin config --provider gemini --ai-key KEY      # Set AI provider
+skillcoin config --wallet 0xYourAddress              # Set wallet
+skillcoin config --gateway https://ipfs.io/ipfs      # Set IPFS gateway
 ```
 
 ---
 
-## 🏗️ How It Works (Architecture)
+## How It Works
 
-1. **Storage (Lighthouse & IPFS)**
-   When you `publish`, the `.md` file represents your AI agent's instructions. It is pinned to IPFS and backed up on the Filecoin network using Lighthouse. This guarantees the file can never be deleted or altered (immutable CID).
+1. **Storage** — Skills are uploaded to Filecoin via the `@filoz/synapse-sdk` with PDP (Provable Data Possession) proofs. Each upload returns an IPFS-compatible Root CID and a Filecoin Piece CID. Files are accessible through any IPFS gateway.
 
-2. **Retrieval (Multi-Gateway)**
-   When you `install`, the CLI fetches the CID metadata from the Skillcoin API, then aggressively attempts to download the file from multiple IPFS gateways simultaneously (`gateway.lighthouse.storage`, `ipfs.io`, `cloudflare-ipfs.com`) to ensure maximum speed and reliability.
+2. **Retrieval** — When you `install`, the CLI fetches metadata from the Skillcoin API, then downloads the file from multiple IPFS gateways (`ipfs.io`, `w3s.link`, `cloudflare-ipfs.com`) with automatic fallback.
 
-3. **Payments (Ethers.js & MetaMask)**
-   If a skill costs money, the CLI spawns a temporary lightweight HTTP server (`localhost:7402`) and opens a self-contained payment UI in your default browser. Once you approve the `tFIL` transfer via MetaMask, the browser securely posts the transaction hash back to the CLI server, which shuts down and resumes the download.
+3. **Payments** — Paid skills use an x402 micropayment flow. The CLI opens a browser-based payment page, you approve the transaction via MetaMask, and the CLI resumes after on-chain confirmation.
+
+4. **AI Generation** — The `chat` command connects to Gemini, OpenAI, or Groq to generate skill files interactively, which can be published directly from the REPL.
 
 ---
 
-## 📁 Local Data Directory
+## Local Data
 
-All Skillcoin data is stored safely in your home directory:
-
-```text
+```
 ~/.skillcoin/
-├── config.json               # CLI settings
+├── config.json               # CLI settings (API key, wallet, provider)
+├── agents/                   # Saved agent profiles
 └── skills/
     └── seo-blog-writer/      # Installed skill
-        ├── SKILL.md          # The actual AI instructions
-        ├── seo-blog-writer.md# (Original filename)
-        └── manifest.json     # Metadata, CID, and version tracking
+        ├── SKILL.md           # AI agent instructions
+        ├── seo-blog-writer.md # Original file
+        └── manifest.json      # Metadata, CID, version
 ```
 
 ---
 
-## 🤝 Contributing
-Built for the Filecoin / ETHGlobal ecosystem. To run locally from source:
+## Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `apiBase` | Skillcoin API server URL | `http://localhost:3001` |
+| `ipfsGateway` | IPFS gateway for downloads | `https://ipfs.io/ipfs` |
+| `wallet` | Your wallet address | — |
+| `aiProvider` | AI provider (`gemini`, `openai`, `groq`) | `gemini` |
+| `aiApiKey` | API key for AI provider | — |
+| `network` | Filecoin network | `calibration` |
+
+---
+
+## Contributing
 
 ```bash
-git clone https://github.com/your-repo/skillcoin.git
-cd skillcoin/packages/cli
+git clone https://github.com/Tanmay-say/skillcoin-frontend.git
+cd skillcoin-frontend/packages/cli
 pnpm install
 pnpm run build
 node dist/bin/skillcoin.js --version
 ```
+
+---
+
+## License
+
+MIT

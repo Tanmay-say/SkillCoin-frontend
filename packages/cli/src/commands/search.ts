@@ -94,11 +94,13 @@ export function searchCommand(program: Command) {
       } catch (error: any) {
         spinner.fail(chalk.red("Failed to fetch marketplace"));
         console.log(chalk.dim(`  Error: ${error.message}`));
-        console.log(
-          chalk.dim(
-            "  Make sure the API server is running on localhost:3001"
-          )
-        );
+        console.log();
+        console.log(chalk.yellow("  Could not connect to the Skillcoin API."));
+        console.log(chalk.dim("  If you're running locally, start the API server:"));
+        console.log(chalk.dim(`    cd apps/api && npx tsx src/index.ts`));
+        console.log();
+        console.log(chalk.dim("  Or set a remote API URL:"));
+        console.log(chalk.dim(`    skillcoin config --api-base https://your-api.vercel.app`));
         console.log();
       }
     });

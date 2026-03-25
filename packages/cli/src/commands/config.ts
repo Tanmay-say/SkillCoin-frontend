@@ -8,7 +8,8 @@ export function configCommand(program: Command) {
     .description("Configure Skillcoin CLI settings")
     .option("-w, --wallet <address>", "Set wallet address")
     .option("-k, --key <privateKey>", "Set private key for payments")
-    .option("-a, --api <url>", "Set API base URL")
+    .option("-a, --api <url>", "Set API base URL (alias: --api-base)")
+    .option("--api-base <url>", "Set API base URL")
     .option("-g, --gateway <url>", "Set IPFS gateway URL")
     .option("-n, --network <network>", "Set network (calibration | mainnet)")
     .option("--provider <provider>", "Set AI provider (gemini | openai | claude | groq)")
@@ -20,15 +21,16 @@ export function configCommand(program: Command) {
       console.log(chalk.dim("  ─────────────────────────"));
       console.log();
 
+      const apiUrl = options.api || options.apiBase;
       const hasUpdates =
-        options.wallet || options.key || options.api || options.gateway ||
+        options.wallet || options.key || apiUrl || options.gateway ||
         options.network || options.provider || options.aiKey || options.aiModel;
 
       if (hasUpdates) {
         const updates: Record<string, string> = {};
         if (options.wallet) updates.wallet = options.wallet;
         if (options.key) updates.privateKey = options.key;
-        if (options.api) updates.apiBase = options.api;
+        if (apiUrl) updates.apiBase = apiUrl;
         if (options.gateway) updates.ipfsGateway = options.gateway;
         if (options.network) updates.network = options.network;
         if (options.provider) updates.aiProvider = options.provider;
