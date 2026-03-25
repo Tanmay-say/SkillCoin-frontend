@@ -43,6 +43,29 @@ export async function downloadFromCID(cid: string): Promise<Buffer> {
   );
 }
 
+export async function downloadFromUrl(url: string): Promise<Buffer> {
+  const config = readConfig();
+  const finalUrl = /^https?:\/\//i.test(url)
+    ? url
+    : `${config.apiBase?.replace(/\/$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
+
+  const response = await fetch(finalUrl, {
+    signal: AbortSignal.timeout(120_000),
+  });
+
+  if (!response.ok) {
+    let body = "";
+    try {
+      body = await response.text();
+    } catch {}
+    throw new Error(
+      `HTTP ${response.status} from download URL${body ? `: ${body.slice(0, 200)}` : ""}`
+    );
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
 async function downloadFromLocalAPI(cid: string): Promise<Buffer> {
   const config = readConfig();
   if (!config.apiBase) {

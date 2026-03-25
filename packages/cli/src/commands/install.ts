@@ -1,8 +1,8 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
-import { fetchSkill } from "../lib/api";
-import { downloadFromCID, saveSkill, isSkillInstalled } from "../lib/download";
+import { fetchSkill, requestDownload } from "../lib/api";
+import { downloadFromCID, downloadFromUrl, saveSkill, isSkillInstalled } from "../lib/download";
 import { handleBrowserPayment } from "../lib/payment";
 
 export function installCommand(program: Command) {
@@ -142,7 +142,12 @@ export function installCommand(program: Command) {
 
       let fileBuffer: Buffer;
       try {
-        fileBuffer = await downloadFromCID(skill.zipCid);
+        const dl = await requestDownload(name);
+        if (dl.status === 200 && dl.data?.downloadUrl) {
+          fileBuffer = await downloadFromUrl(dl.data.downloadUrl);
+        } else {
+          fileBuffer = await downloadFromCID(skill.zipCid);
+        }
         dlSpinner.succeed(
           chalk.green(
             `Downloaded ${(fileBuffer.length / 1024).toFixed(1)} KB`

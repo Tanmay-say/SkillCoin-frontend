@@ -11,9 +11,10 @@ const IPFS_GATEWAYS = [
   "https://cloudflare-ipfs.com/ipfs",
 ];
 
-function buildAccessInfo(skill: any) {
+function buildAccessInfo(skill: any, reqUrl: string) {
   const cid = skill.zipCid;
-  const downloadUrl = FilecoinStorageService.getFileUrl(cid);
+  const origin = new URL(reqUrl).origin;
+  const downloadUrl = `${origin}/api/skills/${skill.slug}/content`;
   const gateways = IPFS_GATEWAYS.map((gw) => `${gw}/${cid}`);
 
   const access: Record<string, any> = {
@@ -52,7 +53,7 @@ download.get("/:slug/download", async (c) => {
       return c.json({ success: false, error: "Skill not found" }, 404);
     }
 
-    const access = buildAccessInfo(skill);
+    const access = buildAccessInfo(skill, c.req.url);
 
     // Free skill — no auth required
     if (Number(skill.priceAmount) === 0 || skill.priceCurrency === "FREE") {
@@ -252,7 +253,7 @@ download.post("/:slug/verify-payment", async (c) => {
 
     await SkillService.incrementDownloads(skill.id);
 
-    const access = buildAccessInfo(skill);
+    const access = buildAccessInfo(skill, c.req.url);
     const token = generateDownloadToken(skill.id, user.userId, skill.zipCid);
 
     return c.json({
@@ -267,6 +268,51 @@ download.post("/:slug/verify-payment", async (c) => {
     console.error("[VerifyPayment] Error:", error);
     const msg = process.env.NODE_ENV === "development" ? error.message : "Internal server error";
     return c.json({ success: false, error: msg }, 500);
+  }
+});
+
+/**
+ * GET /api/skills/:slug/content
+ *
+ * Streams skill content via Synapse piece retrieval.
+ * For paid skills, requires either a valid auth session with purchase
+ * or a short-lived download token from /download.
+ */
+download.get("/:slug/content", async (c) => {
+  try {
+    const slug = c.req.param("slug");
+    const skill = await SkillService.getSkillBySlug(slug);
+    if (!skill) {
+      return c.json({ success: false, error: "Skill not found" }, 404);
+    }
+
+    const isFree = Number(skill.priceAmount) === 0 || skill.priceCurrency === "FREE";
+    if (!isFree) {
+      const user = c.get("user");
+      if (!user?.userId) {
+        return c.json({ success: false, error: "Authentication required for paid downloads" }, 401);
+      }
+      const alreadyPurchased = await PaymentService.isAlreadyPurchased(user.userId, skill.id);
+      if (!alreadyPurchased) {
+        return c.json({ success: false, error: "Payment required before content download" }, 402);
+      }
+    }
+
+    const pieceCid = skill.pieceCid || skill.zipCid;
+    if (!pieceCid) {
+      return c.json({ success: false, error: "Skill content CID missing" }, 500);
+    }
+
+    const data = await FilecoinStorageService.downloadPiece(pieceCid);
+    const filename = `${skill.slug || skill.name}.md`;
+
+    c.header("Content-Type", "text/markdown; charset=utf-8");
+    c.header("Content-Disposition", `attachment; filename=\"${filename}\"`);
+    c.header("Cache-Control", "public, max-age=300");
+    return c.body(Buffer.from(data));
+  } catch (error: any) {
+    console.error("[Content] Error:", error);
+    return c.json({ success: false, error: error.message || "Failed to fetch skill content" }, 500);
   }
 });
 

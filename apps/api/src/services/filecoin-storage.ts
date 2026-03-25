@@ -1,41 +1,9 @@
 import type { UploadResult } from "../types";
 
 const IPFS_GATEWAY = "https://ipfs.io/ipfs";
-const DEBUG_ENDPOINT = "http://127.0.0.1:7246/ingest/95cbc5a9-44a7-4444-a8b3-3705dcb24c37";
-const DEBUG_SESSION_ID = "b98ebe";
 const MIN_FILECOIN_UPLOAD_BYTES = 127;
 
 let _synapse: any = null;
-
-// #region agent log
-function emitDebug(
-  runId: string,
-  hypothesisId: string,
-  location: string,
-  message: string,
-  data: Record<string, unknown> = {}
-): void {
-  console.log(
-    `[DEBUG-b98ebe] ${hypothesisId} ${location} ${message}: ${JSON.stringify(data)}`
-  );
-  fetch(DEBUG_ENDPOINT, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": DEBUG_SESSION_ID,
-    },
-    body: JSON.stringify({
-      sessionId: DEBUG_SESSION_ID,
-      runId,
-      hypothesisId,
-      location,
-      message,
-      data,
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-}
-// #endregion
 
 export class FilecoinNotConfiguredError extends Error {
   constructor() {
@@ -64,79 +32,11 @@ export async function getSynapse(): Promise<any> {
   }
 
   const hexKey = (key.startsWith("0x") ? key : `0x${key}`) as `0x${string}`;
-
-  // #region agent log – H1/H2/H3: diagnose module resolution on Vercel
-  const fs = require("fs");
-  const path = require("path");
-  const diagPaths = [
-    path.resolve(__dirname, "../../node_modules/viem"),
-    path.resolve(__dirname, "../../../node_modules/viem"),
-    path.resolve(__dirname, "../../../../node_modules/viem"),
-    "/var/task/node_modules/viem",
-    "/var/task/apps/api/node_modules/viem",
-    "/var/task/apps/node_modules/viem",
-  ];
-  const diagResults: Record<string, boolean> = {};
-  for (const p of diagPaths) {
-    diagResults[p] = fs.existsSync(p);
-  }
-  console.log(`[DEBUG-b98ebe] viem paths: ${JSON.stringify(diagResults)}`);
-
-  const viemAccountsPaths = [
-    path.resolve(__dirname, "../../node_modules/viem/accounts"),
-    path.resolve(__dirname, "../../node_modules/viem/_cjs/accounts"),
-    "/var/task/node_modules/viem/package.json",
-    "/var/task/apps/api/node_modules/viem/package.json",
-  ];
-  const viemAccDiag: Record<string, any> = {};
-  for (const p of viemAccountsPaths) {
-    viemAccDiag[p] = fs.existsSync(p);
-    if (p.endsWith("package.json") && fs.existsSync(p)) {
-      try {
-        const pkg = JSON.parse(fs.readFileSync(p, "utf8"));
-        viemAccDiag[p + ":exports"] = pkg.exports?.["./accounts"] ?? "NOT_FOUND";
-      } catch {}
-    }
-  }
-  console.log(`[DEBUG-b98ebe] viem/accounts paths: ${JSON.stringify(viemAccDiag)}`);
-
-  let pnpmViemDir = "NOT_FOUND";
-  const pnpmBase = path.resolve(__dirname, "../../../../node_modules/.pnpm");
-  if (fs.existsSync(pnpmBase)) {
-    try {
-      const dirs = fs.readdirSync(pnpmBase).filter((d: string) => d.startsWith("viem"));
-      pnpmViemDir = JSON.stringify(dirs.slice(0, 5));
-    } catch {}
-  }
-  console.log(`[DEBUG-b98ebe] .pnpm viem dirs: ${pnpmViemDir}`);
-  // #endregion
-
-  // #region agent log – H1: try import, capture detailed error
-  let privateKeyToAccount: any;
-  try {
-    const viemAccMod = await import("viem/accounts");
-    privateKeyToAccount = viemAccMod.privateKeyToAccount;
-    console.log(`[DEBUG-b98ebe] H1: viem/accounts import SUCCESS`);
-  } catch (e: any) {
-    console.log(`[DEBUG-b98ebe] H1: viem/accounts import FAILED: ${e.message}`);
-    console.log(`[DEBUG-b98ebe] H1: error code: ${e.code}, require stack: ${JSON.stringify(e.requireStack)}`);
-    throw new Error(`Filecoin init failed: cannot load viem/accounts – ${e.message}`);
-  }
-  // #endregion
-
+  const viemAccMod = await import("viem/accounts");
+  const privateKeyToAccount = viemAccMod.privateKeyToAccount;
   const account = privateKeyToAccount(hexKey);
-
-  // #region agent log – H2: try synapse-sdk import
-  let Synapse: any;
-  try {
-    const mod = await import("@filoz/synapse-sdk");
-    Synapse = mod.Synapse;
-    console.log(`[DEBUG-b98ebe] H2: synapse-sdk import SUCCESS`);
-  } catch (e: any) {
-    console.log(`[DEBUG-b98ebe] H2: synapse-sdk import FAILED: ${e.message}`);
-    throw new Error(`Filecoin init failed: cannot load @filoz/synapse-sdk – ${e.message}`);
-  }
-  // #endregion
+  const mod = await import("@filoz/synapse-sdk");
+  const Synapse = mod.Synapse;
 
   _synapse = Synapse.create({
     account,
@@ -161,131 +61,25 @@ export class FilecoinStorageService {
     buffer: Buffer,
     filename: string
   ): Promise<FilecoinUploadResult> {
-    const runId = `upload-${Date.now()}`;
     if (!hasFilecoinKey()) {
       throw new FilecoinNotConfiguredError();
     }
     if (buffer.length < MIN_FILECOIN_UPLOAD_BYTES) {
-      // #region agent log
-      emitDebug(runId, "H9", "filecoin-storage.ts:upload:validate-size", "file below minimum size", {
-        actualBytes: buffer.length,
-        minimumBytes: MIN_FILECOIN_UPLOAD_BYTES,
-      });
-      // #endregion
       throw new FilecoinInputTooSmallError(buffer.length);
     }
 
     console.log(`[Filecoin] Uploading ${filename} (${buffer.length} bytes) via Synapse SDK...`);
     const synapse = await getSynapse();
-
-    // #region agent log – H5: check allowance and prepare funds before upload
     const dataSize = BigInt(buffer.length);
-    console.log(`[DEBUG-b98ebe] H5: calling storage.prepare with dataSize=${dataSize}`);
     const prep = await synapse.storage.prepare({ dataSize });
-    console.log(`[DEBUG-b98ebe] H5: prepare result – transaction=${prep.transaction ? 'NEEDED' : 'null'}, depositAmount=${prep.transaction?.depositAmount}, includesApproval=${prep.transaction?.includesApproval}`);
 
     if (prep.transaction) {
-      console.log(`[DEBUG-b98ebe] H5: executing prepare transaction (deposit + approval)...`);
       const txResult = await prep.transaction.execute({
         onHash: (hash: string) => console.log(`[Filecoin] Prepare tx: ${hash}`),
       });
-      console.log(`[DEBUG-b98ebe] H5: prepare tx done – hash=${txResult.hash}`);
+      console.log(`[Filecoin] Prepare tx done: ${txResult.hash}`);
     }
-    // #endregion
-
-    // #region agent log – H6/H7/H8: phase-level upload instrumentation
-    emitDebug(runId, "H6", "filecoin-storage.ts:upload:start", "upload start", {
-      filename,
-      bytes: buffer.length,
-    });
-    let result: any;
-    try {
-      result = await synapse.storage.upload(new Uint8Array(buffer), {
-        callbacks: {
-          onProgress: (bytesUploaded: number) => {
-            emitDebug(runId, "H6", "filecoin-storage.ts:upload:onProgress", "bytes uploaded", {
-              bytesUploaded,
-            });
-          },
-          onStored: (providerId: bigint, pieceCid: any) => {
-            emitDebug(runId, "H6", "filecoin-storage.ts:upload:onStored", "piece stored", {
-              providerId: providerId.toString(),
-              pieceCid: pieceCid?.toString?.() ?? String(pieceCid),
-            });
-          },
-          onPiecesAdded: (transaction: string, providerId: bigint, pieces: { pieceCid: any }[]) => {
-            emitDebug(
-              runId,
-              "H8",
-              "filecoin-storage.ts:upload:onPiecesAdded",
-              "pieces added on-chain tx submitted",
-              {
-                transaction,
-                providerId: providerId.toString(),
-                piecesCount: pieces.length,
-              }
-            );
-          },
-          onPiecesConfirmed: (dataSetId: bigint, providerId: bigint, pieces: { pieceCid: any }[]) => {
-            emitDebug(
-              runId,
-              "H8",
-              "filecoin-storage.ts:upload:onPiecesConfirmed",
-              "pieces confirmed on-chain",
-              {
-                dataSetId: dataSetId.toString(),
-                providerId: providerId.toString(),
-                piecesCount: pieces.length,
-              }
-            );
-          },
-          onPullProgress: (providerId: bigint, pieceCid: any, status: string) => {
-            emitDebug(
-              runId,
-              "H7",
-              "filecoin-storage.ts:upload:onPullProgress",
-              "provider pull progress",
-              {
-                providerId: providerId.toString(),
-                pieceCid: pieceCid?.toString?.() ?? String(pieceCid),
-                status,
-              }
-            );
-          },
-          onCopyComplete: (providerId: bigint, pieceCid: any) => {
-            emitDebug(
-              runId,
-              "H7",
-              "filecoin-storage.ts:upload:onCopyComplete",
-              "copy complete",
-              {
-                providerId: providerId.toString(),
-                pieceCid: pieceCid?.toString?.() ?? String(pieceCid),
-              }
-            );
-          },
-          onCopyFailed: (providerId: bigint, pieceCid: any, error: Error) => {
-            emitDebug(runId, "H7", "filecoin-storage.ts:upload:onCopyFailed", "copy failed", {
-              providerId: providerId.toString(),
-              pieceCid: pieceCid?.toString?.() ?? String(pieceCid),
-              error: error?.message ?? "unknown",
-            });
-          },
-        },
-      });
-      emitDebug(runId, "H6", "filecoin-storage.ts:upload:done", "upload finished", {
-        hasResult: true,
-      });
-    } catch (e: any) {
-      emitDebug(runId, "H6", "filecoin-storage.ts:upload:error", "upload failed", {
-        error: e?.message ?? "unknown",
-        shortMessage: e?.shortMessage ?? null,
-        providerId: e?.providerId ?? null,
-        endpoint: e?.endpoint ?? null,
-      });
-      throw e;
-    }
-    // #endregion
+    const result = await synapse.storage.upload(new Uint8Array(buffer));
 
     const pieceCid = result.pieceCid?.toString() || "";
     const primaryCopy = result.copies?.[0];
@@ -306,6 +100,11 @@ export class FilecoinStorageService {
 
   static getFileUrl(cid: string): string {
     return `${IPFS_GATEWAY}/${cid}`;
+  }
+
+  static async downloadPiece(pieceCid: string): Promise<Uint8Array> {
+    const synapse = await getSynapse();
+    return synapse.storage.download({ pieceCid });
   }
 
   static async uploadManifest(manifest: object): Promise<{ cid: string }> {
