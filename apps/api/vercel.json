@@ -3,7 +3,8 @@
   "outputDirectory": ".",
   "functions": {
     "api/index.ts": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "../../node_modules/.pnpm/@filoz+synapse-sdk*/**,../../node_modules/@filoz/**"
     }
   },
   "rewrites": [

@@ -1,5 +1,11 @@
-import path from "path";
 import type { UploadResult } from "../types";
+
+let SynapseSDK: any = null;
+try {
+  SynapseSDK = require("@filoz/synapse-sdk");
+} catch {
+  // Will be loaded on first use if available
+}
 
 const FILECOIN_RPC_URL =
   process.env.FILECOIN_RPC_URL || "https://api.calibration.node.glif.io/rpc/v1";
@@ -26,7 +32,10 @@ export async function getSynapse(): Promise<any> {
     throw new FilecoinNotConfiguredError();
   }
 
-  const { Synapse } = await import("@filoz/synapse-sdk" as any);
+  if (!SynapseSDK) {
+    SynapseSDK = await import("@filoz/synapse-sdk" as any);
+  }
+  const { Synapse } = SynapseSDK;
   _synapse = await Synapse.create({
     privateKey: key,
     rpcURL: FILECOIN_RPC_URL,
