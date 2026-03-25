@@ -21,14 +21,14 @@ export const t = {
 };
 
 export const icons = {
-  check: t.success("✓"),
-  cross: t.error("✗"),
-  warn: t.warn("⚠"),
-  arrow: t.brand("›"),
-  dot: t.muted("·"),
-  bullet: t.brand("▸"),
-  filecoin: t.cyan("◆"),
-  ai: t.brand("⬡"),
-  skill: t.cyan("◎"),
-  chain: t.success("⛓"),
+  check: t.success("\u2713"),
+  cross: t.error("\u2717"),
+  warn: t.warn("!"),
+  arrow: t.brand("\u203A"),
+  dot: t.muted("\u00B7"),
+  bullet: t.brand("\u25B8"),
+  filecoin: t.cyan("\u25C6"),
+  ai: t.brand("\u25C6"),
+  skill: t.cyan("\u25CF"),
+  chain: t.success("\u2192"),
 };

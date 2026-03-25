@@ -1,6 +1,6 @@
 {
   "name": "skillcoin",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "npm for AI Agent Skills — Decentralized, Paid, Permanent. Install AI skills from the Skillcoin marketplace stored on Filecoin/IPFS.",
   "bin": {
     "skillcoin": "./dist/bin/skillcoin.js"
