@@ -98,7 +98,8 @@ export class FilecoinStorageService {
    * Handles both new format (cid.ext) and legacy format (cid_filename).
    */
   static resolveLocalFilename(cid: string): string {
-    const uploadsDir = path.join(process.cwd(), "uploads");
+    const baseDir = process.env.VERCEL ? "/tmp" : process.cwd();
+    const uploadsDir = path.join(baseDir, "uploads");
     if (!fs.existsSync(uploadsDir)) return cid;
 
     const files = fs.readdirSync(uploadsDir);
@@ -168,7 +169,8 @@ export class FilecoinStorageService {
     const ext = path.extname(filename) || ".md";
     const cid = `local_${hash.substring(0, 48)}`;
 
-    const uploadsDir = path.join(process.cwd(), "uploads");
+    const baseDir = process.env.VERCEL ? "/tmp" : process.cwd();
+    const uploadsDir = path.join(baseDir, "uploads");
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
@@ -179,13 +181,17 @@ export class FilecoinStorageService {
 
     console.log(`[Filecoin] ✓ Saved locally: ${filePath}`);
 
+    const apiBase = process.env.VERCEL
+      ? `https://${process.env.VERCEL_URL || "skillcoin-api.vercel.app"}`
+      : `http://localhost:${process.env.PORT || 3001}`;
+
     return {
       cid,
       pieceCid: "",
       filecoinDatasetId: 0,
       size: buffer.length,
       uploadedAt: new Date(),
-      gatewayUrl: `http://localhost:${process.env.PORT || 3001}/uploads/${savedName}`,
+      gatewayUrl: `${apiBase}/uploads/${savedName}`,
       storageType: "local",
     };
   }
