@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
-import { listMarketplaceSkills } from "../lib/api";
+import { listMarketplaceSkills, searchMarketplaceSkills } from "../lib/api";
 
 export function searchCommand(program: Command) {
   program
@@ -20,40 +20,27 @@ export function searchCommand(program: Command) {
       }).start();
 
       try {
-        const { skills, total } = await listMarketplaceSkills(1, 20);
+        const { skills, total } = query
+          ? await searchMarketplaceSkills(query)
+          : await listMarketplaceSkills(1, 20);
 
         if (skills.length === 0) {
-          spinner.info(chalk.yellow("No skills found on the marketplace"));
-          console.log(
-            chalk.dim(
-              `  Run ${chalk.white("skillcoin publish skill.md")} to publish one!`
-            )
-          );
+          if (query) {
+            spinner.info(chalk.yellow(`No skills match "${query}"`));
+          } else {
+            spinner.info(chalk.yellow("No skills found on the marketplace"));
+            console.log(
+              chalk.dim(
+                `  Run ${chalk.white("skillcoin publish skill.md")} to publish one!`
+              )
+            );
+          }
           console.log();
           return;
         }
 
-        spinner.succeed(chalk.green(`${total} skill(s) on marketplace`));
+        spinner.succeed(chalk.green(`${total} skill(s)${query ? ` matching "${query}"` : " on marketplace"}`));
         console.log();
-
-        // Filter by query if provided
-        let filtered = skills;
-        if (query) {
-          const q = query.toLowerCase();
-          filtered = skills.filter(
-            (s) =>
-              s.name.toLowerCase().includes(q) ||
-              s.slug.toLowerCase().includes(q) ||
-              (s.description || "").toLowerCase().includes(q) ||
-              (s.tags || []).some((t) => t.toLowerCase().includes(q))
-          );
-
-          if (filtered.length === 0) {
-            console.log(chalk.yellow(`  No skills match "${query}"`));
-            console.log();
-            return;
-          }
-        }
 
         // Table header
         console.log(
@@ -68,7 +55,7 @@ export function searchCommand(program: Command) {
         );
         console.log(chalk.dim("  " + "─".repeat(72)));
 
-        for (const s of filtered) {
+        for (const s of skills) {
           const price =
             Number(s.priceAmount) === 0
               ? chalk.green("Free")
@@ -96,10 +83,7 @@ export function searchCommand(program: Command) {
         console.log(chalk.dim(`  Error: ${error.message}`));
         console.log();
         console.log(chalk.yellow("  Could not connect to the Skillcoin API."));
-        console.log(chalk.dim("  If you're running locally, start the API server:"));
-        console.log(chalk.dim(`    cd apps/api && npx tsx src/index.ts`));
-        console.log();
-        console.log(chalk.dim("  Or set a remote API URL:"));
+        console.log(chalk.dim("  Check your connection or set API URL:"));
         console.log(chalk.dim(`    skillcoin config --api-base https://your-api.vercel.app`));
         console.log();
       }

@@ -12,7 +12,7 @@ import { listMarketplaceSkills, uploadSkill } from "../lib/api";
 export function chatCommand(program: Command) {
   program
     .command("chat")
-    .description("Interactive AI chat — Claude Code-style REPL for skill development")
+    .description("Interactive AI chat — REPL for skill development")
     .option("--provider <provider>", "AI provider override (gemini | openai | groq)")
     .option("--api-key <key>", "API key override")
     .option("--model <model>", "Model override")

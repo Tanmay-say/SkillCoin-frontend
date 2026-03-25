@@ -24,7 +24,6 @@ export interface AiChat {
 const DEFAULT_MODELS: Record<AiProvider, string> = {
   gemini: "gemini-2.0-flash",
   openai: "gpt-4o-mini",
-  claude: "claude-sonnet-4-20250514",
   groq: "llama-3.3-70b-versatile",
 };
 

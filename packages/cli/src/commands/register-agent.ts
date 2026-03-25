@@ -16,6 +16,7 @@ import path from "path";
 import ora from "ora";
 import chalk from "chalk";
 import { uploadWithFilecoinPin, isFilecoinPinAvailable } from "../lib/filecoin-pin";
+import { readConfig } from "../lib/config";
 
 // ERC-8004 Identity Registry — Base Sepolia (official)
 const ERC8004_REGISTRY = "0x8004AA63c570c570eBF15376c0dB199918BFe9Fb";
@@ -39,7 +40,8 @@ export async function registerAgentCommand() {
   }
 
   const walletAddress = process.env.FILECOIN_WALLET_ADDRESS || "";
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://skillcoin.xyz";
+  const config = readConfig();
+  const apiUrl = config.apiBase;
 
   // ─── Step 1: Build agent card ──────────────────────────────────────────────
   const spinner = ora("Building agent card JSON...").start();
@@ -91,8 +93,8 @@ export async function registerAgentCommand() {
       description: "All skills stored on Filecoin with daily PDP proofs",
     },
     contracts: {
-      SkillRegistry: process.env.SKILL_REGISTRY_ADDRESS || "TBD",
-      SkillLicenseNFT: process.env.SKILL_LICENSE_NFT_ADDRESS || "TBD",
+      SkillRegistry: process.env.SKILL_REGISTRY_ADDRESS || "0x30AcdeB5C03F5E02b0E7e9f22B20cBC4dF182690",
+      SkillLicenseNFT: process.env.SKILL_LICENSE_NFT_ADDRESS || "0x7cFaf07016514f5261768Ce991D9E373cBC8d6e9",
       network: "Filecoin Calibration FVM (chainId 314159)",
     },
     links: {

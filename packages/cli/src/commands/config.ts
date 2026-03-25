@@ -12,7 +12,7 @@ export function configCommand(program: Command) {
     .option("--api-base <url>", "Set API base URL")
     .option("-g, --gateway <url>", "Set IPFS gateway URL")
     .option("-n, --network <network>", "Set network (calibration | mainnet)")
-    .option("--provider <provider>", "Set AI provider (gemini | openai | claude | groq)")
+    .option("--provider <provider>", "Set AI provider (gemini | openai | groq)")
     .option("--ai-key <apiKey>", "Set AI provider API key")
     .option("--ai-model <model>", "Set AI model name")
     .action(async (options: any) => {

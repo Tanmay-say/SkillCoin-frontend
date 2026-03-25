@@ -13,7 +13,7 @@ const program = new Command();
 program
   .name("skillcoin")
   .description("npm for AI Agent Skills — Decentralized, Paid, Permanent on Filecoin")
-  .version("0.3.0");
+  .version(require("../../package.json").version);
 
 installCommand(program);
 publishCommand(program);

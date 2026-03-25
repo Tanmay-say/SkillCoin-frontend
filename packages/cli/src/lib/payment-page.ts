@@ -1,6 +1,7 @@
 /**
  * Self-contained HTML payment page served at localhost:7402
- * Uses ethers.js from CDN for MetaMask wallet connection + native tFIL transfer
+ * Uses ethers.js from CDN for MetaMask wallet connection + native token transfer
+ * On Calibration testnet: tFIL (native). Currency label comes from API.
  */
 
 export interface PaymentPageParams {
@@ -101,15 +102,15 @@ export function buildPaymentPage(params: PaymentPageParams): string {
 <div class="card">
   <div class="logo">⚡</div>
   <h1>Skillcoin Payment</h1>
-  <p class="subtitle">Pay with tFIL to install this skill</p>
+  <p class="subtitle">Pay to install this skill</p>
 
   <div class="skill-info">
     <div class="row"><span class="label">Skill</span><span class="value">${params.skillName}</span></div>
     <div class="row"><span class="label">Network</span><span class="value">Filecoin Calibration</span></div>
-    <div class="row"><span class="label">Token</span><span class="value">tFIL (native)</span></div>
+    <div class="row"><span class="label">Token</span><span class="value">${params.currency}</span></div>
   </div>
 
-  <div class="price-tag">${params.price} tFIL</div>
+  <div class="price-tag">${params.price} ${params.currency}</div>
 
   <div id="step-connect">
     <button class="btn btn-primary" id="connectBtn" onclick="connectWallet()">
@@ -123,7 +124,7 @@ export function buildPaymentPage(params: PaymentPageParams): string {
     <p class="balance-info" id="balanceInfo"></p>
     <div class="divider"></div>
     <button class="btn btn-primary" id="payBtn" onclick="pay()">
-      Pay ${params.price} tFIL
+      Pay ${params.price} ${params.currency}
     </button>
     <p class="status" id="payStatus"></p>
   </div>
@@ -191,7 +192,7 @@ async function connectWallet() {
             params: [{
               chainId: '0x' + CONFIG.chainId.toString(16),
               chainName: 'Filecoin Calibration',
-              nativeCurrency: { name: 'Test FIL', symbol: 'tFIL', decimals: 18 },
+              nativeCurrency: { name: 'Test FIL', symbol: '${params.currency}', decimals: 18 },
               rpcUrls: [CONFIG.rpcUrl],
               blockExplorerUrls: ['https://calibration.filfox.info/'],
             }],
@@ -206,7 +207,7 @@ async function connectWallet() {
     const balance = await provider.getBalance(userAddress);
     const balStr = ethers.formatEther(balance);
     document.getElementById('walletAddr').textContent = userAddress;
-    document.getElementById('balanceInfo').textContent = 'Balance: ' + parseFloat(balStr).toFixed(4) + ' tFIL';
+    document.getElementById('balanceInfo').textContent = 'Balance: ' + parseFloat(balStr).toFixed(4) + ' ${params.currency}';
     showStep('step-pay');
   } catch (err) {
     btn.disabled = false;
@@ -228,7 +229,7 @@ async function pay() {
     // Check balance
     const balance = await provider.getBalance(userAddress);
     if (balance < amount) {
-      throw new Error('Insufficient tFIL. You have ' + parseFloat(ethers.formatEther(balance)).toFixed(4) + ' tFIL, need ' + CONFIG.price + ' tFIL.\\nGet free tFIL at https://faucet.calibnet.chainsafe-fil.io');
+      throw new Error('Insufficient funds. You have ' + parseFloat(ethers.formatEther(balance)).toFixed(4) + ' ${params.currency}, need ' + CONFIG.price + ' ${params.currency}.\\nGet test tokens at https://faucet.calibnet.chainsafe-fil.io');
     }
 
     // Native tFIL transfer

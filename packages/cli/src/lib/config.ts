@@ -6,7 +6,7 @@ const SKILLCOIN_DIR = path.join(os.homedir(), ".skillcoin");
 const CONFIG_PATH = path.join(SKILLCOIN_DIR, "config.json");
 const SKILLS_DIR = path.join(SKILLCOIN_DIR, "skills");
 
-export type AiProvider = "gemini" | "openai" | "claude" | "groq";
+export type AiProvider = "gemini" | "openai" | "groq";
 
 export interface SkillcoinConfig {
   wallet: string;
@@ -23,7 +23,7 @@ export interface SkillcoinConfig {
 const DEFAULT_CONFIG: SkillcoinConfig = {
   wallet: "",
   privateKey: "",
-  apiBase: "http://localhost:3001",
+  apiBase: "https://skillcoin-api.vercel.app",
   ipfsGateway: "https://ipfs.io/ipfs",
   skillsDir: SKILLS_DIR,
   network: "calibration",

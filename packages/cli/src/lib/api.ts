@@ -144,3 +144,27 @@ export async function listMarketplaceSkills(
     total: json.data.pagination.total,
   };
 }
+
+/**
+ * Server-side search via /api/skills/search?q=
+ */
+export async function searchMarketplaceSkills(
+  query: string,
+  page = 1,
+  limit = 20
+): Promise<{ skills: SkillMeta[]; total: number }> {
+  const config = readConfig();
+  const res = await fetch(
+    `${config.apiBase}/api/skills/search?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`
+  );
+
+  if (!res.ok) {
+    throw new Error("Search request failed");
+  }
+
+  const json = (await res.json()) as any;
+  return {
+    skills: json.data.skills,
+    total: json.data.pagination.total,
+  };
+}

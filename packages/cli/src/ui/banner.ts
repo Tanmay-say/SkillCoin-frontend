@@ -2,7 +2,7 @@ import chalk from "chalk";
 import { t, icons } from "./theme";
 import { readConfig } from "../lib/config";
 
-const VERSION = "0.3.0";
+import { version as VERSION } from "../../package.json";
 
 const LOGO = `
   ${t.brand("███████")}${t.cyan("╗")} ${t.brand("██")}${t.cyan("╗  ")}${t.brand("██")}${t.cyan("╗")} ${t.brand("██")}${t.cyan("╗")} ${t.brand("██")}${t.cyan("╗")} ${t.brand("██")}${t.cyan("╗")}
@@ -39,7 +39,7 @@ export function showBanner(mode: "cli" | "chat" | "agent" = "cli") {
 export function showStatus() {
   const config = readConfig();
   const hasWallet = !!config.wallet;
-  const hasApi = config.apiBase !== "http://localhost:3001";
+  const hasApi = !!config.apiBase;
   const hasAiKey = !!(config as any).aiApiKey;
 
   console.log(`  ${t.label("Status")}`);
