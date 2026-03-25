@@ -148,7 +148,7 @@ export class FilecoinStorageService {
   static async verifyCidAccessible(cid: string): Promise<boolean> {
     if (cid.startsWith("local_")) return true;
     try {
-      const response = await fetch(`${IPFS_GATEWAY}/${cid}`, { method: "HEAD" });
+      const response: any = await fetch(`${IPFS_GATEWAY}/${cid}`, { method: "HEAD" });
       return response.status >= 200 && response.status < 300;
     } catch {
       return false;

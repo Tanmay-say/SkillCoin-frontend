@@ -22,7 +22,7 @@ const MAX_SIZE = 10 * 1024 * 1024;
  */
 upload.post("/", async (c) => {
   try {
-    const formData = await c.req.formData();
+    const formData: any = await c.req.formData();
     const file = formData.get("file") as File | null;
     const metadataStr = formData.get("metadata") as string | null;
 

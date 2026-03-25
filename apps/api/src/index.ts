@@ -73,7 +73,6 @@ app.get("/health", (c) => {
 
 // ─── Local Uploads (Filecoin/Synapse local fallback) ───────────────
 
-import { serveStatic } from "@hono/node-server/serve-static";
 import path from "path";
 import fs from "fs";
 
