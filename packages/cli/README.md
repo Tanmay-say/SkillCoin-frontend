@@ -223,7 +223,7 @@ skillcoin config --gateway https://ipfs.io/ipfs      # Set IPFS gateway
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `apiBase` | Skillcoin API server URL | `https://skillcoin-api.vercel.app` |
+| `apiBase` | Skillcoin API server URL | (must be set) |
 | `ipfsGateway` | IPFS gateway for downloads | `https://ipfs.io/ipfs` |
 | `wallet` | Your wallet address | — |
 | `aiProvider` | AI provider (`gemini`, `openai`, `groq`) | `gemini` |

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { FilecoinStorageService } from "../services/filecoin-storage";
+import { FilecoinStorageService, FilecoinNotConfiguredError } from "../services/filecoin-storage";
 import { SynapseService } from "../services/synapse";
 import { SkillService } from "../services/skill";
 import { UploadMetadataSchema } from "../types";
@@ -8,17 +8,13 @@ import { type AuthUser } from "../middleware/auth";
 type Variables = { user: AuthUser };
 const upload = new Hono<{ Variables: Variables }>();
 
-// Max upload size: 10MB (for .md files this is very generous)
 const MAX_SIZE = 10 * 1024 * 1024;
 
 /**
  * POST /api/skills/upload - Upload a skill (.md file)
  *
- * Expects multipart/form-data with:
- *  - file: .md file (the skill instructions)
- *  - metadata: JSON string with skill info
- *
- * Simplified flow: accepts a single .md file → uploads to Filecoin via Synapse SDK → saves to DB
+ * Uploads to Filecoin via Synapse SDK. Returns 503 if Filecoin is not configured.
+ * No silent local fallback — all storage is real or the request fails.
  */
 upload.post("/", async (c) => {
   try {
@@ -30,7 +26,6 @@ upload.post("/", async (c) => {
       return c.json({ success: false, error: "File is required" }, 400);
     }
 
-    // Size check
     if (file.size > MAX_SIZE) {
       return c.json(
         { success: false, error: "File too large. Maximum size is 10MB" },
@@ -38,19 +33,17 @@ upload.post("/", async (c) => {
       );
     }
 
-    // Validate file type — accept .md, .txt, and .zip for backwards compat
     const filename = file.name.toLowerCase();
     const isMarkdown = filename.endsWith(".md") || filename.endsWith(".txt");
     const isZip = filename.endsWith(".zip");
 
     if (!isMarkdown && !isZip) {
       return c.json(
-        { success: false, error: "Only .md and .txt files are supported" },
+        { success: false, error: "Only .md, .txt, and .zip files are supported" },
         400
       );
     }
 
-    // Parse metadata
     if (!metadataStr) {
       return c.json({ success: false, error: "Metadata JSON is required" }, 400);
     }
@@ -71,7 +64,6 @@ upload.post("/", async (c) => {
     }
     const metadata = parsed.data;
 
-    // Get creator address from auth or metadata (dev mode)
     const user = c.get("user");
     let creatorAddress: string;
     if (user?.address) {
@@ -86,7 +78,6 @@ upload.post("/", async (c) => {
       return c.json({ success: false, error: "Creator address is required" }, 400);
     }
 
-    // Generate slug
     const slug = metadata.name
       .toLowerCase()
       .replace(/[^a-z0-9-]/g, "-")
@@ -97,7 +88,6 @@ upload.post("/", async (c) => {
       return c.json({ success: false, error: "Skill name produces an empty slug" }, 400);
     }
 
-    // Check uniqueness
     const existingSkill = await SkillService.getSkillBySlugInternal(slug);
     if (existingSkill) {
       return c.json(
@@ -106,20 +96,13 @@ upload.post("/", async (c) => {
       );
     }
 
-    // Read file buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Upload the .md file to Filecoin via Synapse SDK
-    const uploadResult = await FilecoinStorageService.uploadFile(
-      buffer,
-      file.name
-    );
+    const uploadResult = await FilecoinStorageService.uploadFile(buffer, file.name);
 
-    // Create Filecoin storage deal record (kept for compatibility, skip if Synapse unavailable)
-    const deal = await SynapseService.createStorageDeal(uploadResult.cid);
+    const deal = await SynapseService.lookupDataset(uploadResult.cid);
 
-    // Create skill record in database
     const skill = await SkillService.createSkill({
       name: metadata.name,
       slug,
@@ -130,23 +113,25 @@ upload.post("/", async (c) => {
       zipCid: uploadResult.cid,
       filecoinDealId: uploadResult.filecoinDatasetId
         ? `dataset-${uploadResult.filecoinDatasetId}`
-        : deal.dealId,
+        : deal?.dealId || undefined,
       pieceCid: uploadResult.pieceCid || undefined,
       filecoinDatasetId: uploadResult.filecoinDatasetId || undefined,
       creatorAddress,
       priceAmount: metadata.price,
       priceCurrency: metadata.currency,
-      storageType: uploadResult.storageType,
+      storageType: "filecoin",
     });
 
-    const isLocal = uploadResult.cid.startsWith("local_");
-    const gateways = isLocal
-      ? [uploadResult.gatewayUrl]
-      : [
-          `https://ipfs.io/ipfs/${uploadResult.cid}`,
-          `https://w3s.link/ipfs/${uploadResult.cid}`,
-          `https://cloudflare-ipfs.com/ipfs/${uploadResult.cid}`,
-        ];
+    const gateways = [
+      `https://ipfs.io/ipfs/${uploadResult.cid}`,
+      `https://w3s.link/ipfs/${uploadResult.cid}`,
+      `https://cloudflare-ipfs.com/ipfs/${uploadResult.cid}`,
+    ];
+
+    const datasetId = uploadResult.filecoinDatasetId || null;
+    const explorerUrl = datasetId
+      ? `https://pdp.vxb.ai/calibration/dataset/${datasetId}`
+      : deal?.explorerUrl ?? null;
 
     return c.json({
       success: true,
@@ -155,17 +140,15 @@ upload.post("/", async (c) => {
         slug,
         cid: uploadResult.cid,
         pieceCid: uploadResult.pieceCid || null,
-        filecoinDatasetId: uploadResult.filecoinDatasetId || null,
+        filecoinDatasetId: datasetId,
         dealId: skill.filecoinDealId,
         status: "uploaded",
-        storageType: uploadResult.storageType,
+        storageType: "filecoin",
         gatewayUrl: uploadResult.gatewayUrl,
         gateways,
-        explorerUrl: uploadResult.filecoinDatasetId
-          ? `https://pdp.vxb.ai/calibration/dataset/${uploadResult.filecoinDatasetId}`
-          : deal.explorerUrl,
-        proofBadge: uploadResult.filecoinDatasetId
-          ? { dataSetId: uploadResult.filecoinDatasetId, verified: true }
+        explorerUrl,
+        proofBadge: datasetId
+          ? { dataSetId: datasetId, verified: true }
           : null,
         marketplaceUrl: `/skills/${slug}`,
         installCmd: `skillcoin install ${slug}`,
@@ -173,6 +156,17 @@ upload.post("/", async (c) => {
     });
   } catch (error: any) {
     console.error("[Upload] Error:", error);
+
+    if (error instanceof FilecoinNotConfiguredError) {
+      return c.json(
+        {
+          success: false,
+          error: "Filecoin storage is not configured on this server. Set FILECOIN_PRIVATE_KEY to enable uploads.",
+        },
+        503
+      );
+    }
+
     const msg = process.env.NODE_ENV === "development" ? error.message : "Upload failed";
     return c.json({ success: false, error: msg }, 500);
   }

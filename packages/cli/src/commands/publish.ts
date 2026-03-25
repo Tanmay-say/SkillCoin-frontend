@@ -116,25 +116,25 @@ export function publishCommand(program: Command) {
         }).start();
 
         try {
-          const result = await uploadSkill(fileBuffer, filename, {
-            name: skillName,
-            description,
-            category: options.category,
-            tags,
-            price: parseFloat(options.price) || 0.5,
-            currency: "USDC",
-            version: options.version,
-            creatorAddress: config.wallet || "0x0000000000000000000000000000000000000000",
-          });
+          const result = await uploadSkill(
+            fileBuffer,
+            filename,
+            {
+              name: skillName,
+              description,
+              category: options.category,
+              tags,
+              price: parseFloat(options.price) || 0,
+              currency: "USDC",
+              version: options.version,
+              creatorAddress: config.wallet || "0x0000000000000000000000000000000000000000",
+            },
+            config.authToken || undefined
+          );
 
-          const isFilecoin = result.storageType === "filecoin";
           spinner.stop();
 
-          console.log(
-            isFilecoin
-              ? chalk.bold.green("  ✓ Skill stored on Filecoin permanently")
-              : chalk.bold.yellow("  ✓ Skill published with local storage (set FILECOIN_PRIVATE_KEY for on-chain storage)")
-          );
+          console.log(chalk.bold.green("  ✓ Skill stored on Filecoin permanently"));
           console.log();
           console.log(chalk.white("  Storage Details"));
           console.log(chalk.dim("  ───────────────────────────────────"));
@@ -152,7 +152,7 @@ export function publishCommand(program: Command) {
           console.log(chalk.white("  Access URLs (use any to download)"));
           console.log(chalk.dim("  ───────────────────────────────────"));
           if (result.gateways && result.gateways.length > 0) {
-            const labels = isFilecoin ? ["IPFS", "W3S", "CF"] : ["Local"];
+            const labels = ["IPFS", "W3S", "CF"];
             result.gateways.forEach((url: string, i: number) => {
               const label = (labels[i] || `GW${i + 1}`).padEnd(7);
               console.log(chalk.dim(`  ${label} ${chalk.cyan(url)}`));
@@ -161,7 +161,7 @@ export function publishCommand(program: Command) {
             console.log(chalk.dim(`  URL:     ${chalk.cyan(result.gatewayUrl)}`));
           }
 
-          if (result.explorerUrl && isFilecoin) {
+          if (result.explorerUrl) {
             console.log();
             console.log(chalk.white("  Filecoin Proof"));
             console.log(chalk.dim("  ───────────────────────────────────"));

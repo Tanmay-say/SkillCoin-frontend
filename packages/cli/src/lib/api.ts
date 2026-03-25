@@ -1,5 +1,15 @@
 import { readConfig } from "./config";
 
+function requireApiBase(): string {
+  const config = readConfig();
+  if (!config.apiBase) {
+    throw new Error(
+      "API server not configured. Run: skillcoin config --api-base <url>"
+    );
+  }
+  return config.apiBase;
+}
+
 export interface SkillMeta {
   id: string;
   name: string;
@@ -37,8 +47,8 @@ export interface PaymentChallenge {
  * Fetch skill metadata from the API
  */
 export async function fetchSkill(name: string): Promise<SkillMeta> {
-  const config = readConfig();
-  const res = await fetch(`${config.apiBase}/api/skills/${name}`);
+  const apiBase = requireApiBase();
+  const res = await fetch(`${apiBase}/api/skills/${name}`);
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({})) as any;
@@ -60,14 +70,14 @@ export async function requestDownload(
   data?: DownloadResponse;
   challenge?: PaymentChallenge;
 }> {
-  const config = readConfig();
+  const apiBase = requireApiBase();
   const headers: Record<string, string> = {};
 
   if (paymentProof) {
     headers["X-Payment-Proof"] = paymentProof;
   }
 
-  const res = await fetch(`${config.apiBase}/api/skills/${slug}/download`, {
+  const res = await fetch(`${apiBase}/api/skills/${slug}/download`, {
     headers,
   });
 
@@ -98,19 +108,25 @@ export async function requestDownload(
 export async function uploadSkill(
   fileBuffer: Buffer,
   filename: string,
-  metadata: Record<string, any>
+  metadata: Record<string, any>,
+  authToken?: string
 ): Promise<any> {
-  const config = readConfig();
+  const apiBase = requireApiBase();
 
-  // Use native FormData + Blob (Node 20+)
   const blob = new Blob([fileBuffer], { type: "text/markdown" });
   const form = new FormData();
   form.append("file", blob, filename);
   form.append("metadata", JSON.stringify(metadata));
 
-  const res = await fetch(`${config.apiBase}/api/skills/upload`, {
+  const headers: Record<string, string> = {};
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+  }
+
+  const res = await fetch(`${apiBase}/api/skills/upload`, {
     method: "POST",
     body: form,
+    headers,
   });
 
   const json = (await res.json()) as any;
@@ -129,9 +145,9 @@ export async function listMarketplaceSkills(
   page = 1,
   limit = 20
 ): Promise<{ skills: SkillMeta[]; total: number }> {
-  const config = readConfig();
+  const apiBase = requireApiBase();
   const res = await fetch(
-    `${config.apiBase}/api/skills?page=${page}&limit=${limit}`
+    `${apiBase}/api/skills?page=${page}&limit=${limit}`
   );
 
   if (!res.ok) {
@@ -153,9 +169,9 @@ export async function searchMarketplaceSkills(
   page = 1,
   limit = 20
 ): Promise<{ skills: SkillMeta[]; total: number }> {
-  const config = readConfig();
+  const apiBase = requireApiBase();
   const res = await fetch(
-    `${config.apiBase}/api/skills/search?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`
+    `${apiBase}/api/skills/search?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`
   );
 
   if (!res.ok) {

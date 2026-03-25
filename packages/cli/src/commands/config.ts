@@ -15,6 +15,7 @@ export function configCommand(program: Command) {
     .option("--provider <provider>", "Set AI provider (gemini | openai | groq)")
     .option("--ai-key <apiKey>", "Set AI provider API key")
     .option("--ai-model <model>", "Set AI model name")
+    .option("--auth-token <token>", "Set API auth token (JWT)")
     .action(async (options: any) => {
       console.log();
       console.log(chalk.bold.cyan("  ⚙️  Skillcoin Config"));
@@ -24,7 +25,8 @@ export function configCommand(program: Command) {
       const apiUrl = options.api || options.apiBase;
       const hasUpdates =
         options.wallet || options.key || apiUrl || options.gateway ||
-        options.network || options.provider || options.aiKey || options.aiModel;
+        options.network || options.provider || options.aiKey || options.aiModel ||
+        options.authToken;
 
       if (hasUpdates) {
         const updates: Record<string, string> = {};
@@ -36,6 +38,7 @@ export function configCommand(program: Command) {
         if (options.provider) updates.aiProvider = options.provider;
         if (options.aiKey) updates.aiApiKey = options.aiKey;
         if (options.aiModel) updates.aiModel = options.aiModel;
+        if (options.authToken) updates.authToken = options.authToken;
 
         const config = writeConfig(updates);
         console.log(chalk.green("  ✓ Configuration updated"));
@@ -67,10 +70,13 @@ function displayConfig(config: any) {
   console.log(
     `  ${chalk.dim("Network:")}      ${chalk.white(config.network)}`
   );
+  console.log(
+    `  ${chalk.dim("Auth Token:")}   ${config.authToken ? chalk.yellow("••••••" + config.authToken.slice(-4)) : chalk.dim("(not set)")}`
+  );
   console.log();
   console.log(chalk.dim("  ── API & Storage ──"));
   console.log(
-    `  ${chalk.dim("API Base:")}     ${chalk.white(config.apiBase)}`
+    `  ${chalk.dim("API Base:")}     ${config.apiBase ? chalk.white(config.apiBase) : chalk.dim("(not set)")}`
   );
   console.log(
     `  ${chalk.dim("IPFS Gateway:")} ${chalk.white(config.ipfsGateway)}`

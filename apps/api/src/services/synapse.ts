@@ -1,17 +1,16 @@
 import type { DealResult } from "../types";
 import { getSynapse, hasFilecoinKey } from "./filecoin-storage";
 
-const CALIBRATION_EXPLORER = "https://calibration.filfox.info/en/deal";
 const PDP_EXPLORER = "https://pdp.vxb.ai/calibration/dataset";
 
 export class SynapseService {
   /**
-   * Create a storage deal on Filecoin Calibration testnet via @filoz/synapse-sdk.
-   * Falls back to a stub deal record if the SDK is unavailable or key is not set.
+   * Look up the dataset that contains the given CID after upload.
+   * Returns the matching dataset info or null if not found.
    */
-  static async createStorageDeal(cid: string): Promise<DealResult> {
+  static async lookupDataset(cid: string): Promise<DealResult | null> {
     if (!hasFilecoinKey()) {
-      return this._stubDeal(cid);
+      return null;
     }
 
     try {
@@ -32,26 +31,26 @@ export class SynapseService {
         };
       }
 
-      return this._stubDeal(cid);
+      return null;
     } catch (error: any) {
-      console.warn("[Synapse] Deal lookup failed:", error.message);
-      return this._stubDeal(cid);
+      console.warn("[Synapse] Dataset lookup failed:", error.message);
+      return null;
     }
   }
 
   /**
-   * Check deal status on Calibration testnet via Synapse SDK
+   * Check deal/dataset status on Calibration testnet via Synapse SDK.
    */
   static async getDealStatus(
     dealId: string
   ): Promise<{ active: boolean; provider: string; status: string }> {
     if (!hasFilecoinKey()) {
-      return { active: true, provider: "local-fallback", status: dealId.startsWith("local-pin-") ? "pinned" : "unknown" };
+      return { active: false, provider: "none", status: "not-configured" };
     }
 
     const datasetId = this._extractDatasetId(dealId);
     if (datasetId === null) {
-      return { active: true, provider: "local-fallback", status: "stub" };
+      return { active: false, provider: "none", status: "unknown" };
     }
 
     try {
@@ -69,19 +68,12 @@ export class SynapseService {
     }
   }
 
-  /**
-   * Get explorer URL for a deal
-   */
   static getExplorerUrl(dealId: string): string {
     const datasetId = this._extractDatasetId(dealId);
     if (datasetId !== null) {
       return `${PDP_EXPLORER}/${datasetId}`;
     }
-    if (dealId.startsWith("local-pin-")) {
-      const cidPart = dealId.replace("local-pin-", "").split("-")[0];
-      return `https://ipfs.io/ipfs/${cidPart}`;
-    }
-    return `${CALIBRATION_EXPLORER}/${dealId}`;
+    return "";
   }
 
   private static _extractDatasetId(dealId: string): number | null {
@@ -90,17 +82,6 @@ export class SynapseService {
       return isNaN(id) ? null : id;
     }
     return null;
-  }
-
-  private static _stubDeal(cid: string): DealResult {
-    const stubDealId = `local-pin-${cid.substring(0, 16)}-${Date.now()}`;
-    return {
-      dealId: stubDealId,
-      cid,
-      provider: "local-fallback",
-      status: "active",
-      explorerUrl: `https://ipfs.io/ipfs/${cid}`,
-    };
   }
 }
 

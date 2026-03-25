@@ -7,6 +7,18 @@ type Variables = { user: AuthUser };
 const skills = new Hono<{ Variables: Variables }>();
 
 /**
+ * Strip sensitive storage fields from public skill responses.
+ * Paid skills must not expose zipCid/manifestCid (content is behind payment gate).
+ */
+function sanitizeSkillForPublic(skill: any): any {
+  const isPaid = Number(skill.priceAmount) > 0 && skill.priceCurrency !== "FREE";
+  if (!isPaid) return skill;
+
+  const { zipCid, manifestCid, ...safe } = skill;
+  return { ...safe, hasContent: true };
+}
+
+/**
  * GET /api/skills - List skills with pagination and filters
  */
 skills.get("/", async (c) => {
@@ -25,7 +37,13 @@ skills.get("/", async (c) => {
     }
 
     const result = await SkillService.getSkills(parsed.data);
-    return c.json({ success: true, data: result });
+    return c.json({
+      success: true,
+      data: {
+        ...result,
+        skills: result.skills.map(sanitizeSkillForPublic),
+      },
+    });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500);
   }
@@ -52,7 +70,13 @@ skills.get("/search", async (c) => {
       parsed.data.page,
       parsed.data.limit
     );
-    return c.json({ success: true, data: result });
+    return c.json({
+      success: true,
+      data: {
+        ...result,
+        skills: result.skills.map(sanitizeSkillForPublic),
+      },
+    });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500);
   }
@@ -70,7 +94,7 @@ skills.get("/:slug", async (c) => {
       return c.json({ success: false, error: "Skill not found" }, 404);
     }
 
-    return c.json({ success: true, data: skill });
+    return c.json({ success: true, data: sanitizeSkillForPublic(skill) });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500);
   }

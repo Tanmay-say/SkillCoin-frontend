@@ -4,7 +4,6 @@ import ora from "ora";
 import { fetchSkill } from "../lib/api";
 import { downloadFromCID, saveSkill, isSkillInstalled } from "../lib/download";
 import { handleBrowserPayment } from "../lib/payment";
-import { readConfig } from "../lib/config";
 
 export function installCommand(program: Command) {
   program
@@ -62,8 +61,6 @@ export function installCommand(program: Command) {
       }
 
       // Show skill info
-      const isLocal = skill.zipCid?.startsWith("local_");
-      const storageLabel = isLocal ? chalk.yellow("local") : chalk.green("filecoin");
       console.log(
         chalk.dim(`  Description: ${skill.description?.substring(0, 80) || "—"}`)
       );
@@ -75,31 +72,49 @@ export function installCommand(program: Command) {
         )
       );
       console.log(
-        chalk.dim(`  Storage: ${storageLabel}`)
+        chalk.dim(`  Storage: ${chalk.green("filecoin")}`)
       );
-      console.log(
-        chalk.dim(`  CID:     ${chalk.white(skill.zipCid)}`)
-      );
+      if (skill.zipCid) {
+        console.log(
+          chalk.dim(`  CID:     ${chalk.white(skill.zipCid)}`)
+        );
+      }
       console.log();
 
       // Step 2: Handle payment if required
       if (!isFree && options.payment !== false) {
         console.log(
-          chalk.yellow(`  💰 This skill costs ${price} ${skill.priceCurrency}`)
+          chalk.yellow(`  This skill costs ${price} ${skill.priceCurrency}`)
         );
         console.log();
 
-        const config = readConfig();
-        const adminVault =
-          process.env.ADMIN_VAULT_ADDRESS ||
-          "0x286bd33A27079f28a4B4351a85Ad7f23A04BDdfC";
+        const { requestDownload } = await import("../lib/api");
+        let recipient = process.env.ADMIN_VAULT_ADDRESS || "";
+
+        if (!recipient) {
+          try {
+            const dlResult = await requestDownload(name);
+            if (dlResult.status === 402 && dlResult.challenge?.recipient) {
+              recipient = dlResult.challenge.recipient;
+            }
+          } catch {
+            // Fall through — payment page will show error if no recipient
+          }
+        }
+
+        if (!recipient) {
+          console.log(chalk.red("  Could not determine payment recipient from API."));
+          console.log(chalk.dim("  Set ADMIN_VAULT_ADDRESS env var or contact the marketplace operator."));
+          console.log();
+          return;
+        }
 
         try {
           const txHash = await handleBrowserPayment({
             skillName: name,
             skillId: skill.id,
             price: price,
-            recipient: adminVault,
+            recipient,
             currency: skill.priceCurrency || "USDC",
           });
 
@@ -119,10 +134,9 @@ export function installCommand(program: Command) {
         console.log();
       }
 
-      // Step 3: Download from IPFS/local
-      const dlLabel = isLocal ? "API server" : "IPFS/Filecoin";
+      // Step 3: Download from IPFS/Filecoin
       const dlSpinner = ora({
-        text: chalk.dim(`Downloading from ${dlLabel}...`),
+        text: chalk.dim("Downloading from IPFS/Filecoin..."),
         color: "cyan",
       }).start();
 
@@ -131,15 +145,13 @@ export function installCommand(program: Command) {
         fileBuffer = await downloadFromCID(skill.zipCid);
         dlSpinner.succeed(
           chalk.green(
-            `Downloaded ${(fileBuffer.length / 1024).toFixed(1)} KB from ${dlLabel}`
+            `Downloaded ${(fileBuffer.length / 1024).toFixed(1)} KB`
           )
         );
       } catch (error: any) {
         dlSpinner.fail(chalk.red("Download failed"));
         console.log(chalk.dim(`  Error: ${error.message}`));
-        if (!isLocal) {
-          console.log(chalk.dim(`  Tried gateways: ipfs.io, w3s.link, cloudflare-ipfs.com`));
-        }
+        console.log(chalk.dim(`  Tried gateways: ipfs.io, w3s.link, cloudflare-ipfs.com`));
         console.log();
         return;
       }
@@ -173,13 +185,12 @@ export function installCommand(program: Command) {
           )
         );
         console.log(chalk.dim(`    Path:    ${installPath}`));
-        console.log(chalk.dim(`    CID:     ${skill.zipCid}`));
-        console.log(chalk.dim(`    Storage: ${isLocal ? "local (API server)" : "Filecoin (IPFS)"}`));
-        if (!isLocal) {
+        if (skill.zipCid) {
+          console.log(chalk.dim(`    CID:     ${skill.zipCid}`));
           console.log(chalk.dim(`    IPFS:    ${chalk.cyan(`https://ipfs.io/ipfs/${skill.zipCid}`)}`));
-          if (skill.filecoinDatasetId) {
-            console.log(chalk.dim(`    Proof:   ${chalk.cyan(`https://pdp.vxb.ai/calibration/dataset/${skill.filecoinDatasetId}`)}`));
-          }
+        }
+        if (skill.filecoinDatasetId) {
+          console.log(chalk.dim(`    Proof:   ${chalk.cyan(`https://pdp.vxb.ai/calibration/dataset/${skill.filecoinDatasetId}`)}`));
         }
         console.log();
       } catch (error: any) {

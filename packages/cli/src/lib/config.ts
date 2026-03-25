@@ -11,6 +11,7 @@ export type AiProvider = "gemini" | "openai" | "groq";
 export interface SkillcoinConfig {
   wallet: string;
   privateKey: string;
+  authToken: string;
   apiBase: string;
   ipfsGateway: string;
   skillsDir: string;
@@ -23,7 +24,8 @@ export interface SkillcoinConfig {
 const DEFAULT_CONFIG: SkillcoinConfig = {
   wallet: "",
   privateKey: "",
-  apiBase: "https://skillcoin-api.vercel.app",
+  authToken: "",
+  apiBase: "",
   ipfsGateway: "https://ipfs.io/ipfs",
   skillsDir: SKILLS_DIR,
   network: "calibration",

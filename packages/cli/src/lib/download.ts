@@ -45,9 +45,13 @@ export async function downloadFromCID(cid: string): Promise<Buffer> {
 
 async function downloadFromLocalAPI(cid: string): Promise<Buffer> {
   const config = readConfig();
-  const baseUrl = config.apiBase || "http://localhost:3001";
+  if (!config.apiBase) {
+    throw new Error(
+      "API server not configured. Run: skillcoin config --api-base <url>"
+    );
+  }
 
-  const response = await fetch(`${baseUrl}/uploads/${cid}`, {
+  const response = await fetch(`${config.apiBase}/uploads/${cid}`, {
     signal: AbortSignal.timeout(30_000),
   });
 

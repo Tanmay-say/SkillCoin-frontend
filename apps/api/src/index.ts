@@ -51,68 +51,12 @@ app.get("/", (c) => {
   return c.json({
     name: "Skillcoin API",
     version: "2.0.0",
-    tagline: "npm for AI Agent Skills — Decentralized, Paid, Permanent",
     status: "running",
-    storage: "Filecoin Pin + Synapse SDK (PDP proofs)",
-    ai: "Gemini 2.0 Flash (skill generation)",
-    endpoints: {
-      skills: "/api/skills",
-      upload: "/api/skills/upload",
-      download: "/api/skills/:slug/download",
-      generate: "/api/skills/generate",
-      modifySkill: "/api/skills/generate/modify",
-      verify: "/api/skills/:slug/verify",
-      auth: "/api/auth",
-    },
   });
 });
 
 app.get("/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
-// ─── Local Uploads (Filecoin/Synapse local fallback) ───────────────
-
-import path from "path";
-import fs from "fs";
-
-// Serve local fallback upload files at /uploads/*
-// Supports exact filename match and CID-prefix lookup for backwards compat.
-app.get("/uploads/:filename", async (c) => {
-  const requested = c.req.param("filename");
-  const uploadsDir = path.resolve(process.cwd(), "uploads");
-
-  let filePath = path.resolve(uploadsDir, requested);
-
-  // Security: prevent path traversal
-  if (!filePath.startsWith(uploadsDir)) {
-    return c.json({ error: "Invalid path" }, 400);
-  }
-
-  // If exact file doesn't exist, try CID-prefix lookup (handles old `cid_name` and new `cid.ext` formats)
-  if (!fs.existsSync(filePath) && requested.startsWith("local_")) {
-    const files = fs.readdirSync(uploadsDir);
-    const match = files.find((f) => f.startsWith(requested));
-    if (match) {
-      filePath = path.resolve(uploadsDir, match);
-    }
-  }
-
-  if (!fs.existsSync(filePath)) {
-    return c.json({ error: "File not found" }, 404);
-  }
-
-  const fileBuffer = fs.readFileSync(filePath);
-  const ext = path.extname(filePath).toLowerCase();
-  const mimeTypes: Record<string, string> = {
-    ".md": "text/markdown",
-    ".zip": "application/zip",
-    ".json": "application/json",
-    ".txt": "text/plain",
-  };
-  c.header("Content-Type", mimeTypes[ext] || "application/octet-stream");
-  c.header("Content-Disposition", `attachment; filename="${path.basename(filePath)}"`);
-  return c.body(fileBuffer);
 });
 
 // ─── Routes ────────────────────────────────────────────────

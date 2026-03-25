@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { PaymentService } from "../services/payment";
 import { SkillService } from "../services/skill";
 import { FilecoinStorageService } from "../services/filecoin-storage";
-import { authMiddleware, generateDownloadToken, type AuthUser } from "../middleware/auth";
+import { generateDownloadToken, type AuthUser } from "../middleware/auth";
 import { VerifyPaymentSchema } from "../types";
 
 const IPFS_GATEWAYS = [
@@ -13,19 +13,13 @@ const IPFS_GATEWAYS = [
 
 function buildAccessInfo(skill: any) {
   const cid = skill.zipCid;
-  const isLocal = cid.startsWith("local_");
-  const storageType: string = skill.storageType || (isLocal ? "local" : "filecoin");
-
   const downloadUrl = FilecoinStorageService.getFileUrl(cid);
-
-  const gateways = isLocal
-    ? [downloadUrl]
-    : IPFS_GATEWAYS.map((gw) => `${gw}/${cid}`);
+  const gateways = IPFS_GATEWAYS.map((gw) => `${gw}/${cid}`);
 
   const access: Record<string, any> = {
     cid,
     downloadUrl,
-    storageType,
+    storageType: skill.storageType || "filecoin",
     gateways,
   };
 
