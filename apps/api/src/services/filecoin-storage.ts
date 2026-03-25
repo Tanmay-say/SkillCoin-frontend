@@ -74,7 +74,7 @@ export async function getSynapse(): Promise<any> {
   // #region agent log – H1: try import, capture detailed error
   let privateKeyToAccount: any;
   try {
-    const viemAccMod = await import("viem/accounts" as any);
+    const viemAccMod = await import("viem/accounts");
     privateKeyToAccount = viemAccMod.privateKeyToAccount;
     console.log(`[DEBUG-b98ebe] H1: viem/accounts import SUCCESS`);
   } catch (e: any) {
@@ -89,7 +89,7 @@ export async function getSynapse(): Promise<any> {
   // #region agent log – H2: try synapse-sdk import
   let Synapse: any;
   try {
-    const mod = await import("@filoz/synapse-sdk" as any);
+    const mod = await import("@filoz/synapse-sdk");
     Synapse = mod.Synapse;
     console.log(`[DEBUG-b98ebe] H2: synapse-sdk import SUCCESS`);
   } catch (e: any) {
