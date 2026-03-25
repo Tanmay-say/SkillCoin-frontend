@@ -14,6 +14,9 @@ function emitDebug(
   message: string,
   data: Record<string, unknown> = {}
 ): void {
+  console.log(
+    `[DEBUG-b98ebe] ${hypothesisId} ${location} ${message}: ${JSON.stringify(data)}`
+  );
   fetch(DEBUG_ENDPOINT, {
     method: "POST",
     headers: {
