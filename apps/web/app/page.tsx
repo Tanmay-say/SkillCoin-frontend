@@ -7,7 +7,17 @@ import Footer from "@/components/Footer";
 import SkillCard from "@/components/SkillCard";
 import InstallCommand from "@/components/InstallCommand";
 import { fetchSkills, type Skill } from "@/lib/api";
-import { Box, Database, Download, ArrowRight, Zap, Shield, Globe, Loader2 } from "lucide-react";
+import {
+  ArrowRight,
+  BrainCircuit,
+  Box,
+  Files,
+  FolderTree,
+  Globe,
+  Loader2,
+  Shield,
+  Zap,
+} from "lucide-react";
 
 export default function HomePage() {
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -24,43 +34,52 @@ export default function HomePage() {
     <main className="min-h-screen">
       <Navbar />
 
-      {/* ─── Hero ─────────────────────────────────────── */}
       <section className="relative pt-32 pb-20 overflow-hidden">
-        {/* Background Glow */}
         <div className="absolute inset-0 bg-hero-glow pointer-events-none" />
         <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-brand-purple/10 rounded-full blur-[120px] pointer-events-none" />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          {/* Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass text-xs font-medium text-text-secondary mb-8 animate-fade-in">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            Built for Filecoin + Flow Hackathon
+            Project context compiler for coding agents
           </div>
 
-          {/* Headline */}
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6 animate-slide-up">
-            <span className="gradient-text">npm</span> for AI
+            <span className="gradient-text">Context OS</span> for
             <br />
-            Agent Skills
+            Agentic Coding
           </h1>
 
-          <p className="text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto mb-10 animate-slide-up" style={{ animationDelay: "0.1s" }}>
-            Publish, discover, and install reusable AI workflows.
+          <p
+            className="text-lg sm:text-xl text-text-secondary max-w-3xl mx-auto mb-6 animate-slide-up"
+            style={{ animationDelay: "0.1s" }}
+          >
+            Skillcoin turns a PRD, implementation brief, and key decisions into an IDE-native context filesystem for Cursor, Claude Code, and coding agents.
             <br className="hidden sm:block" />
-            Stored permanently on <span className="text-brand-cyan font-medium">Filecoin</span>.
-            Paid via <span className="text-brand-purple-light font-medium">x402</span>.
+            Reusable skills stay portable and permanent on <span className="text-brand-cyan font-medium">Filecoin</span>.
           </p>
 
-          {/* Terminal Command */}
+          <p
+            className="text-sm sm:text-base text-white/80 max-w-4xl mx-auto mb-10 leading-7 animate-slide-up"
+            style={{ animationDelay: "0.15s" }}
+          >
+            That is exactly why it reduces token usage and error rate. The IDE or coding agent does not need the full PRD every turn; it reads the right file at the right time. Skillcoin should generate an IDE-native context filesystem, not just a single <code className="text-brand-cyan text-sm">SKILL.md</code>. It is infrastructure for agentic coding.
+          </p>
+
           <div className="max-w-md mx-auto mb-10 animate-slide-up" style={{ animationDelay: "0.2s" }}>
             <InstallCommand name={skills.length > 0 ? skills[0].name : "your-skill"} />
           </div>
 
-          {/* CTAs */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-slide-up" style={{ animationDelay: "0.3s" }}>
+          <div
+            className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-slide-up"
+            style={{ animationDelay: "0.3s" }}
+          >
             <Link href="/explore" className="btn-primary flex items-center gap-2">
               Explore Skills
               <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link href="/docs" className="btn-secondary flex items-center gap-2">
+              Read the Docs
             </Link>
             <Link href="/create" className="btn-secondary flex items-center gap-2">
               Publish a Skill
@@ -69,56 +88,82 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── Features ─────────────────────────────────── */}
       <section className="py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-              The Skills Infrastructure
+              Why Skillcoin Exists
             </h2>
-            <p className="text-text-secondary max-w-xl mx-auto">
-              Everything you need to create, distribute, and monetize AI agent skills.
+            <p className="text-text-secondary max-w-2xl mx-auto">
+              A project should not re-send the full PRD to the coding agent every turn. Skillcoin compiles durable project memory into the files your IDE can actually use.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="glass rounded-2xl p-8 group hover:border-brand-purple/30 transition-all duration-300">
               <div className="w-12 h-12 rounded-xl bg-brand-purple/15 flex items-center justify-center mb-5 group-hover:glow-purple transition-all">
-                <Box className="w-6 h-6 text-brand-purple-light" />
+                <FolderTree className="w-6 h-6 text-brand-purple-light" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">Create Skills</h3>
+              <h3 className="text-lg font-semibold mb-2">Generate Context Filesystems</h3>
               <p className="text-sm text-text-secondary leading-relaxed">
-                Package AI workflows as portable <code className="text-brand-cyan text-xs">.md</code> files.
-                Compatible with Claude, Cursor, Copilot, and every major AI agent.
+                Convert a PRD into structured project memory like <code className="text-brand-cyan text-xs">.cursor/</code>, <code className="text-brand-cyan text-xs">.claude/</code>, and <code className="text-brand-cyan text-xs">.skillcoin/</code>.
               </p>
             </div>
 
             <div className="glass rounded-2xl p-8 group hover:border-brand-cyan/30 transition-all duration-300">
               <div className="w-12 h-12 rounded-xl bg-brand-cyan/15 flex items-center justify-center mb-5 group-hover:glow-cyan transition-all">
-                <Database className="w-6 h-6 text-brand-cyan" />
+                <BrainCircuit className="w-6 h-6 text-brand-cyan" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">Store on Filecoin</h3>
+              <h3 className="text-lg font-semibold mb-2">Ask Before Building</h3>
               <p className="text-sm text-text-secondary leading-relaxed">
-                Every skill is permanently stored on Filecoin via Synapse SDK.
-                Daily PDP proofs guarantee your skill exists — forever.
+                The CLI asks high-impact clarification questions before generating plans, rules, prompts, and implementation context.
               </p>
             </div>
 
             <div className="glass rounded-2xl p-8 group hover:border-brand-pink/30 transition-all duration-300">
               <div className="w-12 h-12 rounded-xl bg-brand-pink/15 flex items-center justify-center mb-5">
-                <Download className="w-6 h-6 text-brand-pink" />
+                <Files className="w-6 h-6 text-brand-pink" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">Install Anywhere</h3>
+              <h3 className="text-lg font-semibold mb-2">Use Only Relevant Skills</h3>
               <p className="text-sm text-text-secondary leading-relaxed">
-                One command to install any skill. x402 micropayment handled automatically.
-                As simple as <code className="text-brand-cyan text-xs">npm install</code>.
+                Instead of dumping everything into one prompt, Skillcoin projects include only the rules, workflows, and skills needed for the build.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ─── How It Works ─────────────────────────────── */}
+      <section className="py-24 border-t border-white/5">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="glass-strong rounded-3xl p-8 lg:p-12">
+            <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-10 items-start">
+              <div>
+                <p className="text-sm uppercase tracking-[0.24em] text-brand-cyan mb-4">Advantages</p>
+                <h2 className="text-3xl sm:text-4xl font-bold mb-5">
+                  Lower token waste, fewer repeated mistakes, better project accuracy
+                </h2>
+                <p className="text-text-secondary leading-8 max-w-3xl">
+                  Skillcoin moves project memory out of chat history and into files the agent can resolve on demand. That keeps planning durable, reduces re-explaining architecture, and helps the coding IDE retrieve only the context needed for the current task.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                {[
+                  "PRD becomes structured project memory instead of repeated chat context.",
+                  "Clarification happens once, then decisions are stored for later implementation.",
+                  "IDE-native files like .cursor and .claude keep workflows modular and reusable.",
+                  "Selected project skills reduce noise versus loading a generic mega-prompt.",
+                ].map((item) => (
+                  <div key={item} className="glass rounded-2xl p-5 text-sm text-text-secondary leading-7">
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="py-24 border-t border-white/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
@@ -126,7 +171,7 @@ export default function HomePage() {
               How It Works
             </h2>
             <p className="text-text-secondary max-w-xl mx-auto">
-              Three steps from creation to installation.
+              From project brief to IDE-native build context.
             </p>
           </div>
 
@@ -134,20 +179,20 @@ export default function HomePage() {
             {[
               {
                 step: "01",
-                title: "Upload",
-                desc: "Creator packages AI skill as a ZIP with SKILL.md + manifest.json. Upload via website or CLI.",
+                title: "Ingest the Brief",
+                desc: "User provides a PRD, project idea, architecture goal, or implementation request through the CLI.",
                 icon: <Zap className="w-5 h-5" />,
               },
               {
                 step: "02",
-                title: "Store & List",
-                desc: "Skill is uploaded to Filecoin via Synapse SDK, anchored on Calibration testnet with PDP proofs, and listed on the marketplace.",
+                title: "Clarify and Plan",
+                desc: "Skillcoin asks the missing questions, compiles decisions, and generates a compact project spec and context bundle.",
                 icon: <Shield className="w-5 h-5" />,
               },
               {
                 step: "03",
-                title: "Install & Pay",
-                desc: "Developer runs skillcoin install. x402 micropayment auto-completes. Skill files appear in their project.",
+                title: "Emit IDE Files",
+                desc: "The CLI writes .cursor, .claude, .skillcoin, rules, prompts, and selected skills so agents can implement with less context overhead.",
                 icon: <Globe className="w-5 h-5" />,
               },
             ].map((item) => (
@@ -168,7 +213,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── Skills Showcase ──────────────────────────── */}
       <section className="py-24 border-t border-white/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-end justify-between mb-10">
@@ -178,8 +222,8 @@ export default function HomePage() {
               </h2>
               <p className="text-text-secondary">
                 {skills.length > 0
-                  ? "Real skills published on Filecoin."
-                  : "No skills published yet — be the first!"}
+                  ? "Reusable skills that can be projected into project-specific agent bundles."
+                  : "No skills published yet - be the first!"}
               </p>
             </div>
             <Link
@@ -223,26 +267,24 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ─── CTA ──────────────────────────────────────── */}
       <section className="py-24 border-t border-white/5">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="glass rounded-3xl p-12 lg:p-16 relative overflow-hidden">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] bg-brand-purple/15 rounded-full blur-[100px] pointer-events-none" />
             <div className="relative">
               <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-                Start publishing your skills today
+                Build once, route context where the agent needs it
               </h2>
               <p className="text-text-secondary max-w-lg mx-auto mb-8">
-                Join the decentralized skills economy. Create once, earn forever.
-                Your skills live permanently on Filecoin.
+                Skillcoin should generate an IDE-native context filesystem, not just a single SKILL.md. Publish reusable skills, generate project memory, and let coding agents read the right file at the right time.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link href="/create" className="btn-primary flex items-center gap-2">
-                  Publish a Skill
+                <Link href="/docs" className="btn-primary flex items-center gap-2">
+                  Explore Docs
                   <ArrowRight className="w-4 h-4" />
                 </Link>
-                <Link href="/explore" className="btn-secondary">
-                  Browse Marketplace
+                <Link href="/create" className="btn-secondary">
+                  Publish a Skill
                 </Link>
               </div>
             </div>

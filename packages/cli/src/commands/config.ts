@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import { readConfig, writeConfig } from "../lib/config";
+import { getSupportedIdes, isProjectBundleMode, isTargetIde } from "../lib/project";
 
 export function configCommand(program: Command) {
   program
@@ -43,9 +44,25 @@ export function configCommand(program: Command) {
         if (options.aiKey) updates.aiApiKey = options.aiKey;
         if (options.aiModel) updates.aiModel = options.aiModel;
         if (options.authToken) updates.authToken = options.authToken;
-        if (options.defaultIde) updates.defaultIde = options.defaultIde;
+        if (options.defaultIde) {
+          if (!isTargetIde(options.defaultIde)) {
+            console.log(chalk.red(`  Unsupported IDE: ${options.defaultIde}`));
+            console.log(chalk.dim(`  Supported IDEs: ${getSupportedIdes().join(", ")}`));
+            console.log();
+            return;
+          }
+          updates.defaultIde = options.defaultIde;
+        }
         if (options.clarificationRounds) updates.clarificationRounds = parseInt(options.clarificationRounds, 10) || 2;
-        if (options.projectOutputMode) updates.projectOutputMode = options.projectOutputMode;
+        if (options.projectOutputMode) {
+          if (!isProjectBundleMode(options.projectOutputMode)) {
+            console.log(chalk.red(`  Unsupported project output mode: ${options.projectOutputMode}`));
+            console.log(chalk.dim("  Supported modes: lean, standard, full"));
+            console.log();
+            return;
+          }
+          updates.projectOutputMode = options.projectOutputMode;
+        }
 
         const config = writeConfig(updates);
         console.log(chalk.green("  ✓ Configuration updated"));
@@ -105,7 +122,7 @@ function displayConfig(config: any) {
   console.log();
   console.log(chalk.dim("  ── Project Defaults ──"));
   console.log(
-    `  ${chalk.dim("Default IDE:")}  ${chalk.white(config.defaultIde || "cursor")}`
+    `  ${chalk.dim("Default IDE:")}  ${chalk.white(config.defaultIde || "cursor")} ${chalk.dim(`(${getSupportedIdes().join(", ")})`)}`
   );
   console.log(
     `  ${chalk.dim("Questions:")}    ${chalk.white(String(config.clarificationRounds || 2))}`

@@ -2,10 +2,21 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Skillcoin — npm for AI Agent Skills",
+  title: "Skillcoin - Infrastructure for Agentic Coding",
   description:
-    "Decentralized marketplace for AI Agent Skills. Publish, discover, and install reusable AI workflows stored permanently on Filecoin.",
-  keywords: ["AI", "skills", "marketplace", "Filecoin", "decentralized", "npm", "agents"],
+    "Skillcoin generates IDE-native context filesystems for Cursor, Claude Code, and agentic coding workflows, with reusable skills stored on Filecoin.",
+  keywords: [
+    "AI",
+    "skills",
+    "marketplace",
+    "Filecoin",
+    "decentralized",
+    "npm",
+    "agents",
+    "cursor",
+    "claude code",
+    "agentic coding",
+  ],
 };
 
 export default function RootLayout({
