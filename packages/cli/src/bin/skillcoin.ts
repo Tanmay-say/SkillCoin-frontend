@@ -7,6 +7,7 @@ import { configCommand } from "../commands/config";
 import { chatCommand } from "../commands/chat";
 import { agentCommand } from "../commands/agent";
 import { registerAgentCommand } from "../commands/register-agent";
+import { projectCommand } from "../commands/project";
 
 const program = new Command();
 
@@ -22,6 +23,7 @@ searchCommand(program);
 configCommand(program);
 chatCommand(program);
 agentCommand(program);
+projectCommand(program);
 
 program
   .command("register-agent")

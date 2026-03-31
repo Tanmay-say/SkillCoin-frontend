@@ -19,6 +19,9 @@ export interface SkillcoinConfig {
   aiProvider: AiProvider;
   aiApiKey: string;
   aiModel: string;
+  defaultIde: string;
+  clarificationRounds: number;
+  projectOutputMode: string;
 }
 
 const DEFAULT_CONFIG: SkillcoinConfig = {
@@ -32,6 +35,9 @@ const DEFAULT_CONFIG: SkillcoinConfig = {
   aiProvider: "gemini",
   aiApiKey: "",
   aiModel: "",
+  defaultIde: "cursor",
+  clarificationRounds: 2,
+  projectOutputMode: "current-project",
 };
 
 /**

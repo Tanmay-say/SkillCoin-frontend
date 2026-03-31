@@ -16,6 +16,9 @@ export function configCommand(program: Command) {
     .option("--ai-key <apiKey>", "Set AI provider API key")
     .option("--ai-model <model>", "Set AI model name")
     .option("--auth-token <token>", "Set API auth token (JWT)")
+    .option("--default-ide <ide>", "Set default project IDE target")
+    .option("--clarification-rounds <count>", "Set project clarification round limit")
+    .option("--project-output-mode <mode>", "Set project bundle output mode")
     .action(async (options: any) => {
       console.log();
       console.log(chalk.bold.cyan("  ⚙️  Skillcoin Config"));
@@ -26,10 +29,11 @@ export function configCommand(program: Command) {
       const hasUpdates =
         options.wallet || options.key || apiUrl || options.gateway ||
         options.network || options.provider || options.aiKey || options.aiModel ||
-        options.authToken;
+        options.authToken || options.defaultIde || options.clarificationRounds ||
+        options.projectOutputMode;
 
       if (hasUpdates) {
-        const updates: Record<string, string> = {};
+        const updates: Record<string, string | number> = {};
         if (options.wallet) updates.wallet = options.wallet;
         if (options.key) updates.privateKey = options.key;
         if (apiUrl) updates.apiBase = apiUrl;
@@ -39,6 +43,9 @@ export function configCommand(program: Command) {
         if (options.aiKey) updates.aiApiKey = options.aiKey;
         if (options.aiModel) updates.aiModel = options.aiModel;
         if (options.authToken) updates.authToken = options.authToken;
+        if (options.defaultIde) updates.defaultIde = options.defaultIde;
+        if (options.clarificationRounds) updates.clarificationRounds = parseInt(options.clarificationRounds, 10) || 2;
+        if (options.projectOutputMode) updates.projectOutputMode = options.projectOutputMode;
 
         const config = writeConfig(updates);
         console.log(chalk.green("  ✓ Configuration updated"));
@@ -94,6 +101,17 @@ function displayConfig(config: any) {
   );
   console.log(
     `  ${chalk.dim("AI Model:")}     ${config.aiModel ? chalk.white(config.aiModel) : chalk.dim("(default)")}`
+  );
+  console.log();
+  console.log(chalk.dim("  ── Project Defaults ──"));
+  console.log(
+    `  ${chalk.dim("Default IDE:")}  ${chalk.white(config.defaultIde || "cursor")}`
+  );
+  console.log(
+    `  ${chalk.dim("Questions:")}    ${chalk.white(String(config.clarificationRounds || 2))}`
+  );
+  console.log(
+    `  ${chalk.dim("Output Mode:")}  ${chalk.white(config.projectOutputMode || "current-project")}`
   );
   console.log();
 }
