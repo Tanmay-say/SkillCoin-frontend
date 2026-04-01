@@ -95,7 +95,7 @@ export default function CreatePage() {
     if (!file) return;
 
     setStep("uploading");
-    setUploadProgress("Uploading skill to Filecoin via Synapse SDK...");
+    setUploadProgress("Uploading skill to Filecoin via Synapse SDK. This can take a few minutes...");
 
     try {
       const formData = new FormData();
@@ -117,7 +117,7 @@ export default function CreatePage() {
         })
       );
 
-      setUploadProgress("Storing permanently on Filecoin with PDP proofs...");
+      setUploadProgress("Storing permanently on Filecoin with PDP proofs. Please keep this page open...");
 
       const data = await uploadSkill(formData, authToken || undefined);
 

@@ -98,6 +98,7 @@ export async function uploadSkill(formData: FormData, authToken?: string): Promi
 
   const { data } = await api.post("/api/skills/upload", formData, {
     headers,
+    timeout: 5 * 60 * 1000,
   });
   return data.data;
 }
