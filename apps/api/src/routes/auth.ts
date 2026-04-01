@@ -136,7 +136,7 @@ auth.get("/users/:address", async (c) => {
     }
 
     // API-03: Paginated skills list
-    const [skills, totalSkills] = await Promise.all([
+    const [skills, totalSkills, totalDownloadAgg] = await Promise.all([
       prisma.skill.findMany({
         where: { creatorAddress: address, published: true },
         orderBy: { createdAt: "desc" },
@@ -145,6 +145,10 @@ auth.get("/users/:address", async (c) => {
       }),
       prisma.skill.count({
         where: { creatorAddress: address, published: true },
+      }),
+      prisma.skill.aggregate({
+        where: { creatorAddress: address, published: true },
+        _sum: { downloads: true },
       }),
     ]);
 
@@ -160,7 +164,7 @@ auth.get("/users/:address", async (c) => {
         skills,
         stats: {
           totalSkills,
-          totalDownloads: skills.reduce((sum: number, s: any) => sum + s.downloads, 0),
+          totalDownloads: totalDownloadAgg._sum.downloads ?? 0,
         },
         pagination: {
           page,

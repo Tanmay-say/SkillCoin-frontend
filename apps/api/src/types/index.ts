@@ -11,7 +11,7 @@ export const ManifestSchema = z.object({
   license: z.string().default("per-user"),
   price: z.object({
     amount: z.number().min(0),
-    currency: z.enum(["USDC", "FLOW", "FREE"]),
+    currency: z.enum(["USDC", "TFIL", "FREE"]),
   }),
   category: z.string().optional(),
   tags: z.array(z.string()).default([]),
@@ -26,9 +26,17 @@ export const UploadMetadataSchema = z.object({
   category: z.string().optional(),
   tags: z.array(z.string()).default([]),
   price: z.number().min(0).default(0.5),
-  currency: z.enum(["USDC", "FLOW", "FREE"]).default("USDC"),
+  currency: z.enum(["USDC", "TFIL", "FREE"]).default("USDC"),
   version: z.string().regex(/^\d+\.\d+\.\d+$/).default("1.0.0"),
   creatorAddress: z.string(),
+});
+
+export const RegisterUploadedSkillSchema = UploadMetadataSchema.extend({
+  cid: z.string().min(1),
+  pieceCid: z.string().optional(),
+  filecoinDatasetId: z.coerce.number().int().positive().optional(),
+  filecoinDealId: z.string().optional(),
+  storageType: z.enum(["filecoin", "local"]).default("filecoin"),
 });
 
 export const SkillQuerySchema = z.object({
@@ -43,6 +51,7 @@ export const SearchQuerySchema = z.object({
   q: z.string().min(1).max(200),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(20),
+  category: z.string().optional(),
 });
 
 // ─── Auth Schemas ──────────────────────────────────────────
@@ -57,6 +66,7 @@ export const LoginSchema = z.object({
 
 export const VerifyPaymentSchema = z.object({
   txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/, "Invalid transaction hash"),
+  challengeToken: z.string().min(1).optional(),
 });
 
 // ─── Types ─────────────────────────────────────────────────
@@ -67,12 +77,22 @@ export type SkillQuery = z.infer<typeof SkillQuerySchema>;
 export type SearchQuery = z.infer<typeof SearchQuerySchema>;
 
 export interface PaymentChallenge {
+  token: string;
   amount: string;
   currency: string;
   recipient: string;
   skillSlug: string;
+  skillId: string;
+  userId: string;
+  payerAddress: string;
   nonce: string;
   expiresAt: string;
+  paymentType: "native" | "erc20";
+  tokenAddress?: string;
+  tokenDecimals?: number;
+  chainId: number;
+  rpcUrl: string;
+  blockExplorerUrl: string;
 }
 
 export interface UploadResult {

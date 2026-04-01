@@ -1,7 +1,6 @@
 /**
- * Self-contained HTML payment page served at localhost:7402
- * Uses ethers.js from CDN for MetaMask wallet connection + native token transfer
- * On Calibration testnet: tFIL (native). Currency label comes from API.
+ * Self-contained HTML payment page served by the CLI.
+ * Supports both native-token and ERC-20 transfers via MetaMask + ethers.js.
  */
 
 export interface PaymentPageParams {
@@ -12,6 +11,10 @@ export interface PaymentPageParams {
   currency: string;
   chainId: number;
   rpcUrl: string;
+  paymentType: "native" | "erc20";
+  tokenAddress?: string;
+  tokenDecimals?: number;
+  blockExplorerUrl?: string;
 }
 
 export function buildPaymentPage(params: PaymentPageParams): string {
@@ -38,7 +41,7 @@ export function buildPaymentPage(params: PaymentPageParams): string {
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 20px;
     padding: 48px;
-    max-width: 440px;
+    max-width: 460px;
     width: 90%;
     text-align: center;
     box-shadow: 0 20px 60px rgba(0,0,0,0.5);
@@ -107,6 +110,7 @@ export function buildPaymentPage(params: PaymentPageParams): string {
   <div class="skill-info">
     <div class="row"><span class="label">Skill</span><span class="value">${params.skillName}</span></div>
     <div class="row"><span class="label">Network</span><span class="value">Filecoin Calibration</span></div>
+    <div class="row"><span class="label">Method</span><span class="value">${params.paymentType === "erc20" ? "ERC-20 Transfer" : "Native Transfer"}</span></div>
     <div class="row"><span class="label">Token</span><span class="value">${params.currency}</span></div>
   </div>
 
@@ -114,7 +118,7 @@ export function buildPaymentPage(params: PaymentPageParams): string {
 
   <div id="step-connect">
     <button class="btn btn-primary" id="connectBtn" onclick="connectWallet()">
-      🦊 Connect MetaMask
+      Connect MetaMask
     </button>
     <p class="status" id="connectStatus"></p>
   </div>
@@ -130,13 +134,13 @@ export function buildPaymentPage(params: PaymentPageParams): string {
   </div>
 
   <div id="step-done" style="display:none">
-    <button class="btn btn-success" disabled>✓ Payment Complete</button>
-    <p class="status success">Transaction confirmed! This tab will close automatically.</p>
+    <button class="btn btn-success" disabled>Payment Complete</button>
+    <p class="status success">Transaction confirmed. This tab will close automatically.</p>
     <p class="wallet-addr" id="txHashDisplay"></p>
   </div>
 
   <div id="step-error" style="display:none">
-    <button class="btn btn-danger" onclick="location.reload()">✗ Try Again</button>
+    <button class="btn btn-danger" onclick="location.reload()">Try Again</button>
     <p class="status error" id="errorMsg"></p>
   </div>
 </div>
@@ -145,16 +149,62 @@ export function buildPaymentPage(params: PaymentPageParams): string {
 const CONFIG = {
   recipient: "${params.recipient}",
   price: "${params.price}",
+  currency: "${params.currency}",
   chainId: ${params.chainId},
   rpcUrl: "${params.rpcUrl}",
+  paymentType: "${params.paymentType}",
+  tokenAddress: "${params.tokenAddress || ""}",
+  tokenDecimals: ${params.tokenDecimals ?? 18},
+  blockExplorerUrl: "${params.blockExplorerUrl || "https://calibration.filfox.info/en"}",
 };
+
+const ERC20_ABI = [
+  "function balanceOf(address owner) view returns (uint256)",
+  "function transfer(address to, uint256 amount) returns (bool)"
+];
 
 let provider, signer, userAddress;
 
 function showStep(step) {
-  ['step-connect', 'step-pay', 'step-done', 'step-error'].forEach(s =>
-    document.getElementById(s).style.display = s === step ? 'block' : 'none'
-  );
+  ['step-connect', 'step-pay', 'step-done', 'step-error'].forEach((id) => {
+    document.getElementById(id).style.display = id === step ? 'block' : 'none';
+  });
+}
+
+async function switchNetwork() {
+  const targetHex = '0x' + CONFIG.chainId.toString(16);
+  try {
+    await window.ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: targetHex }],
+    });
+  } catch (switchError) {
+    if (switchError.code !== 4902) throw switchError;
+    await window.ethereum.request({
+      method: 'wallet_addEthereumChain',
+      params: [{
+        chainId: targetHex,
+        chainName: 'Filecoin Calibration',
+        nativeCurrency: { name: 'Test FIL', symbol: 'tFIL', decimals: 18 },
+        rpcUrls: [CONFIG.rpcUrl],
+        blockExplorerUrls: [CONFIG.blockExplorerUrl],
+      }],
+    });
+  }
+}
+
+async function getBalanceText() {
+  if (CONFIG.paymentType === 'erc20') {
+    if (!CONFIG.tokenAddress) {
+      throw new Error('This payment challenge is missing the ERC-20 token address.');
+    }
+    const token = new ethers.Contract(CONFIG.tokenAddress, ERC20_ABI, provider);
+    const balance = await token.balanceOf(userAddress);
+    return parseFloat(ethers.formatUnits(balance, CONFIG.tokenDecimals)).toFixed(4) + ' ' + CONFIG.currency;
+  }
+
+  const balance = await provider.getBalance(userAddress);
+  return parseFloat(ethers.formatEther(balance)).toFixed(4) + ' tFIL';
 }
 
 async function connectWallet() {
@@ -172,42 +222,20 @@ async function connectWallet() {
 
   try {
     provider = new ethers.BrowserProvider(window.ethereum);
-    await provider.send("eth_requestAccounts", []);
+    await provider.send('eth_requestAccounts', []);
     signer = await provider.getSigner();
     userAddress = await signer.getAddress();
 
-    // Switch to Filecoin Calibration if needed
     const network = await provider.getNetwork();
     if (Number(network.chainId) !== CONFIG.chainId) {
-      status.innerHTML = '<span class="spinner"></span> Switching to Filecoin Calibration...';
-      try {
-        await window.ethereum.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0x' + CONFIG.chainId.toString(16) }],
-        });
-      } catch (switchError) {
-        if (switchError.code === 4902) {
-          await window.ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [{
-              chainId: '0x' + CONFIG.chainId.toString(16),
-              chainName: 'Filecoin Calibration',
-              nativeCurrency: { name: 'Test FIL', symbol: '${params.currency}', decimals: 18 },
-              rpcUrls: [CONFIG.rpcUrl],
-              blockExplorerUrls: ['https://calibration.filfox.info/'],
-            }],
-          });
-        } else { throw switchError; }
-      }
+      status.innerHTML = '<span class="spinner"></span> Switching network...';
+      await switchNetwork();
       provider = new ethers.BrowserProvider(window.ethereum);
       signer = await provider.getSigner();
     }
 
-    // Show balance
-    const balance = await provider.getBalance(userAddress);
-    const balStr = ethers.formatEther(balance);
     document.getElementById('walletAddr').textContent = userAddress;
-    document.getElementById('balanceInfo').textContent = 'Balance: ' + parseFloat(balStr).toFixed(4) + ' ${params.currency}';
+    document.getElementById('balanceInfo').textContent = 'Balance: ' + await getBalanceText();
     showStep('step-pay');
   } catch (err) {
     btn.disabled = false;
@@ -224,29 +252,40 @@ async function pay() {
   status.innerHTML = '<span class="spinner"></span> Preparing transaction...';
 
   try {
-    const amount = ethers.parseEther(CONFIG.price);
+    let tx;
 
-    // Check balance
-    const balance = await provider.getBalance(userAddress);
-    if (balance < amount) {
-      throw new Error('Insufficient funds. You have ' + parseFloat(ethers.formatEther(balance)).toFixed(4) + ' ${params.currency}, need ' + CONFIG.price + ' ${params.currency}.\\nGet test tokens at https://faucet.calibnet.chainsafe-fil.io');
+    if (CONFIG.paymentType === 'erc20') {
+      if (!CONFIG.tokenAddress) {
+        throw new Error('The marketplace did not provide a token contract for this payment.');
+      }
+      const token = new ethers.Contract(CONFIG.tokenAddress, ERC20_ABI, signer);
+      const amount = ethers.parseUnits(CONFIG.price, CONFIG.tokenDecimals);
+      const balance = await token.balanceOf(userAddress);
+      if (balance < amount) {
+        throw new Error('Insufficient ' + CONFIG.currency + ' balance for this payment.');
+      }
+      status.innerHTML = '<span class="spinner"></span> Confirm token transfer in MetaMask...';
+      tx = await token.transfer(CONFIG.recipient, amount);
+    } else {
+      const amount = ethers.parseEther(CONFIG.price);
+      const balance = await provider.getBalance(userAddress);
+      if (balance < amount) {
+        throw new Error('Insufficient tFIL balance. Get test funds from a Calibration faucet.');
+      }
+      status.innerHTML = '<span class="spinner"></span> Confirm transfer in MetaMask...';
+      tx = await signer.sendTransaction({
+        to: CONFIG.recipient,
+        value: amount,
+      });
     }
-
-    // Native tFIL transfer
-    status.innerHTML = '<span class="spinner"></span> Confirm in MetaMask...';
-    const tx = await signer.sendTransaction({
-      to: CONFIG.recipient,
-      value: amount,
-    });
 
     status.innerHTML = '<span class="spinner"></span> Waiting for confirmation...';
     const receipt = await tx.wait();
-
     const txHash = receipt.hash;
+
     document.getElementById('txHashDisplay').textContent = txHash;
     showStep('step-done');
 
-    // Callback to CLI
     await fetch('/confirm', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -254,7 +293,6 @@ async function pay() {
     });
 
     setTimeout(() => window.close(), 3000);
-
   } catch (err) {
     if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
       btn.disabled = false;

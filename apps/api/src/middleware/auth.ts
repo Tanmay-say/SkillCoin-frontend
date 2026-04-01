@@ -91,3 +91,21 @@ export function generateDownloadToken(
   const opts: SignOptions = { expiresIn: "5m" };
   return jwt.sign({ skillId, userId, cid, purpose: "download" }, getSecret(), opts);
 }
+
+export interface DownloadTokenPayload {
+  skillId: string;
+  userId: string;
+  cid: string;
+  purpose: "download";
+  iat?: number;
+  exp?: number;
+}
+
+export function verifyDownloadToken(token: string): DownloadTokenPayload | null {
+  try {
+    const decoded = jwt.verify(token, getSecret()) as DownloadTokenPayload;
+    return decoded.purpose === "download" ? decoded : null;
+  } catch {
+    return null;
+  }
+}

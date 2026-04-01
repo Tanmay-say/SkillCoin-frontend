@@ -1,9 +1,32 @@
+import fs from "fs";
+import path from "path";
+import { randomUUID } from "crypto";
 import type { UploadResult } from "../types";
 
 const IPFS_GATEWAY = "https://ipfs.io/ipfs";
 const MIN_FILECOIN_UPLOAD_BYTES = 127;
 
 let _synapse: any = null;
+
+function isLocalDevMode(): boolean {
+  return (
+    process.env.NODE_ENV === "development" &&
+    ["1", "true", "yes"].includes((process.env.LOCAL_DEV_MODE || "").toLowerCase())
+  );
+}
+
+function getLocalStorageDir(): string {
+  return path.resolve(
+    process.cwd(),
+    process.env.LOCAL_STORAGE_DIR || ".local-dev/storage"
+  );
+}
+
+function ensureLocalStorageDir(): string {
+  const dir = getLocalStorageDir();
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
 
 export class FilecoinNotConfiguredError extends Error {
   constructor() {
@@ -52,16 +75,55 @@ export interface FilecoinUploadResult extends UploadResult {
 }
 
 export class FilecoinStorageService {
+  static isLocalCid(cid: string): boolean {
+    return cid.startsWith("local_");
+  }
+
+  static async uploadLocalFile(buffer: Buffer, filename: string): Promise<FilecoinUploadResult> {
+    const cid = `local_${randomUUID().replace(/-/g, "")}`;
+    const dir = ensureLocalStorageDir();
+    const contentPath = path.join(dir, `${cid}.bin`);
+    const metaPath = path.join(dir, `${cid}.json`);
+
+    fs.writeFileSync(contentPath, buffer);
+    fs.writeFileSync(
+      metaPath,
+      JSON.stringify(
+        {
+          cid,
+          filename,
+          size: buffer.length,
+          uploadedAt: new Date().toISOString(),
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    return {
+      cid,
+      pieceCid: cid,
+      filecoinDatasetId: 0,
+      size: buffer.length,
+      uploadedAt: new Date(),
+      gatewayUrl: `/uploads/${cid}`,
+      storageType: "local",
+    };
+  }
+
   /**
    * Upload a file buffer to Filecoin via Synapse SDK v0.40+.
-   * Throws FilecoinNotConfiguredError if FILECOIN_PRIVATE_KEY is missing.
-   * Throws on any Synapse/upload failure — no silent fallback.
+   * In localhost dev mode, missing Filecoin config falls back to local disk storage.
    */
   static async uploadFile(
     buffer: Buffer,
     filename: string
   ): Promise<FilecoinUploadResult> {
     if (!hasFilecoinKey()) {
+      if (isLocalDevMode()) {
+        return this.uploadLocalFile(buffer, filename);
+      }
       throw new FilecoinNotConfiguredError();
     }
     if (buffer.length < MIN_FILECOIN_UPLOAD_BYTES) {
@@ -88,23 +150,47 @@ export class FilecoinStorageService {
     console.log(`[Filecoin] Uploaded: Piece CID ${pieceCid}, Dataset ${dataSetId}`);
 
     return {
+      // Synapse gives us a piece CID for retrieval/proof, not a public IPFS gateway root CID.
       cid: pieceCid,
       pieceCid,
       filecoinDatasetId: dataSetId,
       size: buffer.length,
       uploadedAt: new Date(),
-      gatewayUrl: pieceCid ? `${IPFS_GATEWAY}/${pieceCid}` : "",
+      gatewayUrl: "",
       storageType: "filecoin",
     };
   }
 
   static getFileUrl(cid: string): string {
+    if (this.isLocalCid(cid)) {
+      return `/uploads/${cid}`;
+    }
     return `${IPFS_GATEWAY}/${cid}`;
   }
 
   static async downloadPiece(pieceCid: string): Promise<Uint8Array> {
     const synapse = await getSynapse();
     return synapse.storage.download({ pieceCid });
+  }
+
+  static async downloadLocalFile(cid: string): Promise<Buffer> {
+    const dir = ensureLocalStorageDir();
+    const contentPath = path.join(dir, `${cid}.bin`);
+    if (!fs.existsSync(contentPath)) {
+      throw new Error(`Local content not found for ${cid}`);
+    }
+    return fs.readFileSync(contentPath);
+  }
+
+  static async downloadStoredFile(args: {
+    zipCid: string;
+    pieceCid?: string | null;
+    storageType?: string | null;
+  }): Promise<Uint8Array | Buffer> {
+    if (args.storageType === "local" || this.isLocalCid(args.zipCid)) {
+      return this.downloadLocalFile(args.zipCid);
+    }
+    return this.downloadPiece(args.pieceCid || args.zipCid);
   }
 
   static async uploadManifest(manifest: object): Promise<{ cid: string }> {

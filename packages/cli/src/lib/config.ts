@@ -37,7 +37,7 @@ const DEFAULT_CONFIG: SkillcoinConfig = {
   aiModel: "",
   defaultIde: "cursor",
   clarificationRounds: 2,
-  projectOutputMode: "current-project",
+  projectOutputMode: "standard",
 };
 
 /**

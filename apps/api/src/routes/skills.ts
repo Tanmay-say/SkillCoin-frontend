@@ -15,7 +15,7 @@ function sanitizeSkillForPublic(skill: any): any {
   if (!isPaid) return skill;
 
   const { zipCid, manifestCid, ...safe } = skill;
-  return { ...safe, hasContent: true };
+  return { ...safe, zipCid: null, manifestCid: null, hasContent: true };
 }
 
 /**
@@ -58,6 +58,7 @@ skills.get("/search", async (c) => {
       q: c.req.query("q"),
       page: c.req.query("page"),
       limit: c.req.query("limit"),
+      category: c.req.query("category"),
     };
 
     const parsed = SearchQuerySchema.safeParse(rawQuery);
@@ -68,7 +69,8 @@ skills.get("/search", async (c) => {
     const result = await SkillService.searchSkills(
       parsed.data.q,
       parsed.data.page,
-      parsed.data.limit
+      parsed.data.limit,
+      parsed.data.category
     );
     return c.json({
       success: true,

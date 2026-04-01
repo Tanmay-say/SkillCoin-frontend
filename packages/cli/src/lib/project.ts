@@ -138,34 +138,38 @@ export async function generateClarificationQuestions(
   brief: string,
   targetIde: TargetIde
 ): Promise<ClarificationQuestion[]> {
-  const ai = await createAiChat();
-  const prompt = [
-    "You are preparing a project implementation bundle for an AI coding IDE.",
-    `Target IDE: ${targetIde}`,
-    "Read the brief and identify up to 5 high-impact missing decisions.",
-    "Only ask questions that materially affect architecture, stack, scope, auth, data model, payments, deployment, or integrations.",
-    "If the brief is already complete, return an empty array.",
-    QUESTIONS_SCHEMA_NOTE,
-    "",
-    "Brief:",
-    brief,
-  ].join("\n");
+  try {
+    const ai = await createAiChat();
+    const prompt = [
+      "You are preparing a project implementation bundle for an AI coding IDE.",
+      `Target IDE: ${targetIde}`,
+      "Read the brief and identify up to 5 high-impact missing decisions.",
+      "Only ask questions that materially affect architecture, stack, scope, auth, data model, payments, deployment, or integrations.",
+      "If the brief is already complete, return an empty array.",
+      QUESTIONS_SCHEMA_NOTE,
+      "",
+      "Brief:",
+      brief,
+    ].join("\n");
 
-  const response = await ai.send([{ role: "user", content: prompt }]);
-  const parsed = parseJsonEnvelope<ClarificationQuestion[]>(response.content);
-  if (!parsed || !Array.isArray(parsed.data)) {
+    const response = await ai.send([{ role: "user", content: prompt }]);
+    const parsed = parseJsonEnvelope<ClarificationQuestion[]>(response.content);
+    if (!parsed || !Array.isArray(parsed.data)) {
+      return fallbackQuestionsFromBrief(brief);
+    }
+
+    return parsed.data
+      .filter((item) => item && item.id && item.question)
+      .slice(0, 5)
+      .map((item) => ({
+        id: sanitizeId(item.id),
+        question: item.question.trim(),
+        why: (item.why || "Needed to lock the implementation.").trim(),
+        defaultAnswer: (item.defaultAnswer || "Use a pragmatic default.").trim(),
+      }));
+  } catch {
     return fallbackQuestionsFromBrief(brief);
   }
-
-  return parsed.data
-    .filter((item) => item && item.id && item.question)
-    .slice(0, 5)
-    .map((item) => ({
-      id: sanitizeId(item.id),
-      question: item.question.trim(),
-      why: (item.why || "Needed to lock the implementation.").trim(),
-      defaultAnswer: (item.defaultAnswer || "Use a pragmatic default.").trim(),
-    }));
 }
 
 export async function askClarificationQuestions(
@@ -176,12 +180,22 @@ export async function askClarificationQuestions(
     return [];
   }
 
+  const limited = questions.slice(0, Math.max(1, maxRounds * 3));
+
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return limited.map((question) => ({
+      id: question.id,
+      question: question.question,
+      answer: question.defaultAnswer,
+      usedDefault: true,
+    }));
+  }
+
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
-  const limited = questions.slice(0, Math.max(1, maxRounds * 3));
   const answers: ClarificationAnswer[] = [];
 
   try {
@@ -210,73 +224,89 @@ export async function generateProjectSpec(
   answers: ClarificationAnswer[],
   targetIde: TargetIde
 ): Promise<ProjectSpec> {
-  const ai = await createAiChat();
-  const prompt = [
-    "Turn this project brief into a decision-complete implementation spec for an AI coding bundle.",
-    `Target IDE: ${targetIde}`,
-    "Use the clarification answers to resolve ambiguity. Apply pragmatic defaults where needed, and record those defaults in assumptions.",
-    "The spec should optimize for low-token IDE execution context.",
-    PROJECT_SPEC_SCHEMA_NOTE,
-    "",
-    "Brief:",
-    brief,
-    "",
-    "Clarification answers:",
-    JSON.stringify(answers, null, 2),
-  ].join("\n");
+  try {
+    const ai = await createAiChat();
+    const prompt = [
+      "Turn this project brief into a decision-complete implementation spec for an AI coding bundle.",
+      `Target IDE: ${targetIde}`,
+      "Use the clarification answers to resolve ambiguity. Apply pragmatic defaults where needed, and record those defaults in assumptions.",
+      "The spec should optimize for low-token IDE execution context.",
+      PROJECT_SPEC_SCHEMA_NOTE,
+      "",
+      "Brief:",
+      brief,
+      "",
+      "Clarification answers:",
+      JSON.stringify(answers, null, 2),
+    ].join("\n");
 
-  const response = await ai.send([{ role: "user", content: prompt }]);
-  const parsed = parseJsonEnvelope<ProjectSpec>(response.content);
-  if (!parsed?.data) {
+    const response = await ai.send([{ role: "user", content: prompt }]);
+    const parsed = parseJsonEnvelope<ProjectSpec>(response.content);
+    if (!parsed?.data) {
+      return buildFallbackSpec(brief, answers, targetIde);
+    }
+
+    return normalizeSpec(parsed.data, brief, answers, targetIde);
+  } catch {
     return buildFallbackSpec(brief, answers, targetIde);
   }
-
-  return normalizeSpec(parsed.data, brief, answers, targetIde);
 }
 
 export async function generateProjectPlanMarkdown(spec: ProjectSpec): Promise<string> {
-  const ai = await createAiChat();
-  const prompt = [
-    "Write a concise but implementation-ready project plan in markdown.",
-    "Keep sections short and high signal.",
-    "Include Summary, Key Changes, Test Plan, and Assumptions.",
-    "Do not wrap the result in code fences.",
-    "",
-    JSON.stringify(spec, null, 2),
-  ].join("\n");
+  try {
+    const ai = await createAiChat();
+    const prompt = [
+      "Write a concise but implementation-ready project plan in markdown.",
+      "Keep sections short and high signal.",
+      "Include Summary, Key Changes, Test Plan, and Assumptions.",
+      "Do not wrap the result in code fences.",
+      "",
+      JSON.stringify(spec, null, 2),
+    ].join("\n");
 
-  const response = await ai.send([{ role: "user", content: prompt }]);
-  return sanitizeMarkdown(response.content) || renderFallbackPlan(spec);
+    const response = await ai.send([{ role: "user", content: prompt }]);
+    return sanitizeMarkdown(response.content) || renderFallbackPlan(spec);
+  } catch {
+    return renderFallbackPlan(spec);
+  }
 }
 
 export async function generateContextMarkdown(spec: ProjectSpec): Promise<string> {
-  const ai = await createAiChat();
-  const prompt = [
-    "Write a compact project context file for an AI coding IDE.",
-    "Optimize for minimal tokens and high recall.",
-    "Include goal, stack, architecture, constraints, acceptance criteria, and next steps.",
-    "Do not wrap the result in code fences.",
-    "",
-    JSON.stringify(spec, null, 2),
-  ].join("\n");
+  try {
+    const ai = await createAiChat();
+    const prompt = [
+      "Write a compact project context file for an AI coding IDE.",
+      "Optimize for minimal tokens and high recall.",
+      "Include goal, stack, architecture, constraints, acceptance criteria, and next steps.",
+      "Do not wrap the result in code fences.",
+      "",
+      JSON.stringify(spec, null, 2),
+    ].join("\n");
 
-  const response = await ai.send([{ role: "user", content: prompt }]);
-  return sanitizeMarkdown(response.content) || renderFallbackContext(spec);
+    const response = await ai.send([{ role: "user", content: prompt }]);
+    return sanitizeMarkdown(response.content) || renderFallbackContext(spec);
+  } catch {
+    return renderFallbackContext(spec);
+  }
 }
 
 export async function generateProjectRule(spec: ProjectSpec): Promise<string> {
-  const ai = await createAiChat();
-  const prompt = [
-    "Write a durable project rules document in markdown for this project.",
-    "Make it durable, repo-specific, and implementation-oriented.",
-    "Include coding standards, architecture boundaries, and execution rules.",
-    "Do not wrap the result in code fences.",
-    "",
-    JSON.stringify(spec, null, 2),
-  ].join("\n");
+  try {
+    const ai = await createAiChat();
+    const prompt = [
+      "Write a durable project rules document in markdown for this project.",
+      "Make it durable, repo-specific, and implementation-oriented.",
+      "Include coding standards, architecture boundaries, and execution rules.",
+      "Do not wrap the result in code fences.",
+      "",
+      JSON.stringify(spec, null, 2),
+    ].join("\n");
 
-  const response = await ai.send([{ role: "user", content: prompt }]);
-  return sanitizeMarkdown(response.content) || renderFallbackRule(spec);
+    const response = await ai.send([{ role: "user", content: prompt }]);
+    return sanitizeMarkdown(response.content) || renderFallbackRule(spec);
+  } catch {
+    return renderFallbackRule(spec);
+  }
 }
 
 export function buildPlanPrompt(spec: ProjectSpec): string {
@@ -389,11 +419,13 @@ export async function writeProjectBundle(args: {
       briefFile: args.briefFile,
       briefInline: args.usedInlineBrief,
     },
-    files: files.map((file) => path.relative(outputDir, file).replace(/\\/g, "/")),
+    files: [
+      ...files.map((file) => path.relative(outputDir, file).replace(/\\/g, "/")),
+      ".skillcoin/bundle-manifest.json",
+    ],
   };
 
   writeJson(path.join(skillcoinDir, "bundle-manifest.json"), manifest);
-  manifest.files.push(".skillcoin/bundle-manifest.json");
   return manifest;
 }
 
@@ -859,11 +891,46 @@ function extractIntegrationHints(brief: string): string[] {
 }
 
 function extractListishItems(text: string, maxItems: number): string[] {
+  const heuristic = buildFeatureHeuristics(text);
+  if (heuristic.length > 0) {
+    return heuristic.slice(0, maxItems);
+  }
+
   const parts = text
     .split(/\n|,|;/)
     .map((item) => item.replace(/^[-*]\s*/, "").trim())
     .filter((item) => item.length > 12);
   return [...new Set(parts)].slice(0, maxItems);
+}
+
+function buildFeatureHeuristics(text: string): string[] {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  const lower = normalized.toLowerCase();
+  const features: string[] = [];
+
+  if (/dashboard/.test(lower) && /skill/.test(lower)) {
+    features.push("Dashboard for managing published AI skills and marketplace activity");
+  } else if (normalized) {
+    features.push(firstSentence(normalized));
+  }
+
+  if (/auth|login|signin|wallet/.test(lower)) {
+    features.push("Authentication and user session management");
+  }
+  if (/billing|payment|checkout|subscription/.test(lower)) {
+    features.push("Billing and payment workflows");
+  }
+  if (/analytics|metrics|reporting|insights/.test(lower)) {
+    features.push("Analytics and reporting views for marketplace activity");
+  }
+  if (/admin|moderation/.test(lower)) {
+    features.push("Administrative controls and moderation tools");
+  }
+  if (/api|backend|server/.test(lower)) {
+    features.push("Backend APIs for data access and workflow orchestration");
+  }
+
+  return [...new Set(features)].filter(Boolean);
 }
 
 function ensureDir(dirPath: string) {

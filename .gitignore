@@ -62,6 +62,7 @@ prd_text.txt
 # Local uploads (Lighthouse fallback)
 uploads/
 apps/api/uploads/
+apps/api/.local-dev/
 
 # Temp scripts
 create-sample-skill.cjs

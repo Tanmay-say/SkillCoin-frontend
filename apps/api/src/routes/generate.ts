@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { generateRateLimit } from "../middleware/rateLimit";
-import { authMiddleware, type AuthUser } from "../middleware/auth";
+import { optionalAuth, type AuthUser } from "../middleware/auth";
 
 type Variables = { user: AuthUser };
 const generate = new Hono<{ Variables: Variables }>();
@@ -45,7 +45,7 @@ Constraints:
  * Generates a SKILL.md using Gemini AI from a plain-English description.
  * Rate-limited: 20 requests/hour per IP.
  */
-generate.use("/", authMiddleware(), generateRateLimit);
+generate.use("/", optionalAuth(), generateRateLimit);
 generate.post("/", async (c) => {
   try {
     if (!GEMINI_API_KEY) {
@@ -122,7 +122,7 @@ generate.post("/", async (c) => {
  * Modifies an existing SKILL.md based on a natural language instruction.
  * Rate-limited + size-capped.
  */
-generate.use("/modify", authMiddleware(), generateRateLimit);
+generate.use("/modify", optionalAuth(), generateRateLimit);
 generate.post("/modify", async (c) => {
   try {
     if (!GEMINI_API_KEY) {

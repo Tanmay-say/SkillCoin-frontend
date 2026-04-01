@@ -7,25 +7,25 @@ const PAYMENT_PORT_START = 7402;
 const PAYMENT_PORT_END = 7410;
 const PAYMENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
-// Filecoin Calibration testnet (native tFIL used as payment token on testnet)
-const FILECOIN_CALIBRATION = {
-  chainId: 314159,
-  rpcUrl: "https://api.calibration.node.glif.io/rpc/v1",
-};
-
 export interface PaymentRequest {
   skillName: string;
   skillId: string;
   price: number;
   recipient: string;
   currency: string;
+  chainId: number;
+  rpcUrl: string;
+  paymentType: "native" | "erc20";
+  tokenAddress?: string;
+  tokenDecimals?: number;
+  blockExplorerUrl?: string;
 }
 
 /**
  * Browser-based payment flow:
  * 1. Spawn local HTTP server on localhost:7402
  * 2. Open browser to payment page
- * 3. User connects MetaMask → pays in native token (tFIL on Calibration testnet)
+ * 3. User connects MetaMask → pays with the challenge-specified asset
  * 4. Page POSTs txHash back to CLI server
  * 5. CLI shuts down server and returns txHash
  */
@@ -43,8 +43,12 @@ export async function handleBrowserPayment(
       price: req.price,
       recipient: req.recipient,
       currency: req.currency || "USDC",
-      chainId: FILECOIN_CALIBRATION.chainId,
-      rpcUrl: FILECOIN_CALIBRATION.rpcUrl,
+      chainId: req.chainId,
+      rpcUrl: req.rpcUrl,
+      paymentType: req.paymentType,
+      tokenAddress: req.tokenAddress,
+      tokenDecimals: req.tokenDecimals,
+      blockExplorerUrl: req.blockExplorerUrl,
     };
     const paymentHtml = buildPaymentPage(pageParams);
 

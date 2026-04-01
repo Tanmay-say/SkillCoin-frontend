@@ -68,6 +68,7 @@ export default function SkillDetailPage() {
   }
 
   const badgeClass = categoryColors[skill.category || ""] || "bg-brand-purple/15 text-brand-purple-light border-brand-purple/20";
+  const hasPublicCid = !!skill.zipCid && skill.zipCid !== skill.pieceCid;
 
   return (
     <main className="min-h-screen">
@@ -130,7 +131,7 @@ export default function SkillDetailPage() {
                 <h3 className="text-sm font-semibold text-text-secondary mb-3">
                   Install via CLI
                 </h3>
-                <InstallCommand name={skill.name} />
+                <InstallCommand name={skill.slug} />
               </div>
 
               {/* About */}
@@ -189,11 +190,11 @@ export default function SkillDetailPage() {
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-text-secondary">Storage</h3>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    skill.storageType === "filecoin" || !skill.zipCid.startsWith("local_")
+                    skill.storageType === "filecoin"
                       ? "bg-green-500/15 text-green-400 border border-green-500/20"
                       : "bg-amber-500/15 text-amber-400 border border-amber-500/20"
                   }`}>
-                    {skill.storageType === "filecoin" || !skill.zipCid.startsWith("local_") ? "On-Chain" : "Local"}
+                    {skill.storageType === "filecoin" ? "Filecoin" : "Local"}
                   </span>
                 </div>
 
@@ -201,15 +202,21 @@ export default function SkillDetailPage() {
                   <div>
                     <span className="flex items-center gap-2 text-xs text-text-muted mb-1">
                       <Database className="w-3 h-3" />
-                      {skill.zipCid.startsWith("local_") ? "Local CID" : "IPFS CID"}
+                      {hasPublicCid ? "Content CID" : "Protected content"}
                     </span>
-                    <div className="flex items-center gap-2">
-                      <code className="text-xs text-brand-cyan font-mono break-all">
-                        {skill.zipCid.substring(0, 20)}...
-                      </code>
-                      <CopyButton text={skill.zipCid} label="" className="text-text-muted hover:text-white flex-shrink-0" />
-                    </div>
-                    {!skill.zipCid.startsWith("local_") && (
+                    {skill.zipCid ? (
+                      <div className="flex items-center gap-2">
+                        <code className="text-xs text-brand-cyan font-mono break-all">
+                          {skill.zipCid.substring(0, 20)}...
+                        </code>
+                        <CopyButton text={skill.zipCid} label="" className="text-text-muted hover:text-white flex-shrink-0" />
+                      </div>
+                    ) : (
+                      <p className="text-xs text-text-secondary">
+                        Paid skill content stays behind the payment gate. Install through the CLI to retrieve it.
+                      </p>
+                    )}
+                    {hasPublicCid && (
                       <div className="mt-2 space-y-1">
                         {[
                           { label: "IPFS", url: `https://ipfs.io/ipfs/${skill.zipCid}` },
@@ -227,11 +234,6 @@ export default function SkillDetailPage() {
                           </a>
                         ))}
                       </div>
-                    )}
-                    {skill.zipCid.startsWith("local_") && (
-                      <p className="text-xs text-amber-400/70 mt-1">
-                        Stored on API server. Configure FILECOIN_PRIVATE_KEY for decentralized IPFS storage.
-                      </p>
                     )}
                   </div>
 

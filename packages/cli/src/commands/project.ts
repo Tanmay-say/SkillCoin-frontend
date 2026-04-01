@@ -42,24 +42,30 @@ export function projectCommand(program: Command) {
     .option("--mode <mode>", "Bundle mode (lean | standard | full)", getProjectDefaults().outputMode)
     .option("--out <dir>", "Output directory", ".")
     .option("--wizard", "Run the interactive project setup wizard")
-    .action(async (briefFile: string | undefined, options: any) => {
+    .action(async (briefFile: string | undefined, commandOrOptions: any) => {
+      const options = resolveCommandOptions(commandOrOptions);
       const defaults = getProjectDefaults();
-      const usedWizard = !!(options.wizard || (!briefFile && !options.prompt));
+      const prompt = getStringOption(options, "prompt");
+      const ideOption = getStringOption(options, "ide", defaults.ide);
+      const modeOption = getStringOption(options, "mode", defaults.outputMode);
+      const outOption = getStringOption(options, "out", ".");
+      const wizard = getBooleanOption(options, "wizard");
+      const usedWizard = !!(wizard || (!briefFile && !prompt));
       const wizardInput =
         usedWizard
           ? await runProjectWizard({
               briefFile,
-              prompt: options.prompt,
-              ide: options.ide || defaults.ide,
-              mode: options.mode || defaults.outputMode,
-              out: options.out || ".",
+              prompt,
+              ide: ideOption,
+              mode: modeOption,
+              out: outOption,
             })
           : {
               briefFile,
-              prompt: options.prompt,
-              ide: options.ide || defaults.ide,
-              mode: options.mode || defaults.outputMode,
-              out: options.out || ".",
+              prompt,
+              ide: ideOption,
+              mode: modeOption,
+              out: outOption,
             };
 
       if (!wizardInput) {
@@ -70,7 +76,7 @@ export function projectCommand(program: Command) {
       }
 
       briefFile = wizardInput.briefFile;
-      options.prompt = wizardInput.prompt;
+      const effectivePrompt = wizardInput.prompt;
 
       const rawIde = String(wizardInput.ide || defaults.ide || "cursor");
       if (!isTargetIde(rawIde)) {
@@ -103,7 +109,7 @@ export function projectCommand(program: Command) {
       console.log();
 
       try {
-        const source = await loadBrief(briefFile, options.prompt);
+        const source = await loadBrief(briefFile, effectivePrompt);
 
         console.log(chalk.white(`  Target IDE: ${chalk.cyan(ide)}`));
         console.log(chalk.white(`  Mode:       ${chalk.cyan(mode)}`));
@@ -186,8 +192,9 @@ export function projectCommand(program: Command) {
     .command("refine [specFile]")
     .description("Regenerate project bundle files from an existing spec")
     .option("--out <dir>", "Output directory", ".")
-    .action(async (specFile: string | undefined, options: any) => {
-      const outputDir = options.out || ".";
+    .action(async (specFile: string | undefined, commandOrOptions: any) => {
+      const options = resolveCommandOptions(commandOrOptions);
+      const outputDir = getStringOption(options, "out", ".");
       const resolvedSpec = specFile || `${outputDir}/.skillcoin/project-spec.json`;
 
       console.log();
@@ -233,8 +240,9 @@ export function projectCommand(program: Command) {
     .command("status")
     .description("Show status of the generated project bundle in the current repo")
     .option("--out <dir>", "Project directory", ".")
-    .action(async (options: any) => {
-      const outputDir = options.out || ".";
+    .action(async (commandOrOptions: any) => {
+      const options = resolveCommandOptions(commandOrOptions);
+      const outputDir = getStringOption(options, "out", ".");
       const status = getBundleStatus(outputDir);
 
       console.log();
@@ -265,8 +273,9 @@ export function projectCommand(program: Command) {
     .command("export-skill")
     .description("Export the generated project bundle into a reusable skill package")
     .option("--out <dir>", "Project directory", ".")
-    .action(async (options: any) => {
-      const outputDir = options.out || ".";
+    .action(async (commandOrOptions: any) => {
+      const options = resolveCommandOptions(commandOrOptions);
+      const outputDir = getStringOption(options, "out", ".");
 
       console.log();
       console.log(chalk.bold.cyan("  Skillcoin Export Skill"));
@@ -285,6 +294,38 @@ export function projectCommand(program: Command) {
         console.log();
       }
     });
+}
+
+function resolveCommandOptions(commandOrOptions: any) {
+  if (commandOrOptions && typeof commandOrOptions.opts === "function") {
+    return commandOrOptions.opts();
+  }
+  return commandOrOptions || {};
+}
+
+function getStringOption(options: Record<string, any>, key: string, fallback = ""): string {
+  const direct = options?.[key];
+  if (typeof direct === "string" && direct.trim()) {
+    return direct;
+  }
+
+  const flag = `--${key}`;
+  const argvIndex = process.argv.indexOf(flag);
+  if (argvIndex >= 0 && argvIndex + 1 < process.argv.length) {
+    const value = process.argv[argvIndex + 1];
+    if (value && !value.startsWith("--")) {
+      return value;
+    }
+  }
+
+  return fallback;
+}
+
+function getBooleanOption(options: Record<string, any>, key: string): boolean {
+  if (typeof options?.[key] === "boolean") {
+    return options[key];
+  }
+  return process.argv.includes(`--${key}`);
 }
 
 function readExistingAnswers(outputDir: string) {

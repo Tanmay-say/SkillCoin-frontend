@@ -6,7 +6,7 @@ import {
 } from "../services/filecoin-storage";
 import { SynapseService } from "../services/synapse";
 import { SkillService } from "../services/skill";
-import { UploadMetadataSchema } from "../types";
+import { RegisterUploadedSkillSchema, UploadMetadataSchema } from "../types";
 import { type AuthUser } from "../middleware/auth";
 
 type Variables = { user: AuthUser };
@@ -14,11 +14,54 @@ const upload = new Hono<{ Variables: Variables }>();
 
 const MAX_SIZE = 10 * 1024 * 1024;
 
+function buildUploadResponse(args: {
+  skill: any;
+  cid: string;
+  pieceCid?: string | null;
+  filecoinDatasetId?: number | null;
+  storageType: "filecoin" | "local";
+  gatewayUrl?: string;
+}) {
+  const gateways = args.gatewayUrl
+    ? args.storageType === "filecoin"
+      ? [
+          `https://ipfs.io/ipfs/${args.cid}`,
+          `https://w3s.link/ipfs/${args.cid}`,
+          `https://cloudflare-ipfs.com/ipfs/${args.cid}`,
+        ]
+      : [args.gatewayUrl]
+    : [];
+
+  const datasetId = args.filecoinDatasetId || null;
+  const explorerUrl = datasetId
+    ? `https://pdp.vxb.ai/calibration/dataset/${datasetId}`
+    : null;
+
+  return {
+    skillId: args.skill.id,
+    slug: args.skill.slug,
+    cid: args.cid,
+    pieceCid: args.pieceCid || null,
+    filecoinDatasetId: datasetId,
+    dealId: args.skill.filecoinDealId,
+    status: "uploaded",
+    storageType: args.storageType,
+    gatewayUrl: args.gatewayUrl || "",
+    gateways,
+    explorerUrl,
+    proofBadge: datasetId
+      ? { dataSetId: datasetId, verified: true }
+      : null,
+    marketplaceUrl: `/skills/${args.skill.slug}`,
+    installCmd: `skillcoin install ${args.skill.slug}`,
+  };
+}
+
 /**
  * POST /api/skills/upload - Upload a skill (.md file)
  *
- * Uploads to Filecoin via Synapse SDK. Returns 503 if Filecoin is not configured.
- * No silent local fallback — all storage is real or the request fails.
+ * Uploads to Filecoin via Synapse SDK when configured.
+ * In localhost dev mode, uploads fall back to local disk storage.
  */
 upload.post("/", async (c) => {
   try {
@@ -105,7 +148,10 @@ upload.post("/", async (c) => {
 
     const uploadResult = await FilecoinStorageService.uploadFile(buffer, file.name);
 
-    const deal = await SynapseService.lookupDataset(uploadResult.cid);
+    const deal =
+      uploadResult.storageType === "filecoin"
+        ? await SynapseService.lookupDataset(uploadResult.cid)
+        : null;
 
     const skill = await SkillService.createSkill({
       name: metadata.name,
@@ -123,40 +169,19 @@ upload.post("/", async (c) => {
       creatorAddress,
       priceAmount: metadata.price,
       priceCurrency: metadata.currency,
-      storageType: "filecoin",
+      storageType: uploadResult.storageType,
     });
-
-    const gateways = [
-      `https://ipfs.io/ipfs/${uploadResult.cid}`,
-      `https://w3s.link/ipfs/${uploadResult.cid}`,
-      `https://cloudflare-ipfs.com/ipfs/${uploadResult.cid}`,
-    ];
-
-    const datasetId = uploadResult.filecoinDatasetId || null;
-    const explorerUrl = datasetId
-      ? `https://pdp.vxb.ai/calibration/dataset/${datasetId}`
-      : deal?.explorerUrl ?? null;
 
     return c.json({
       success: true,
-      data: {
-        skillId: skill.id,
-        slug,
+      data: buildUploadResponse({
+        skill,
         cid: uploadResult.cid,
         pieceCid: uploadResult.pieceCid || null,
-        filecoinDatasetId: datasetId,
-        dealId: skill.filecoinDealId,
-        status: "uploaded",
-        storageType: "filecoin",
+        filecoinDatasetId: uploadResult.filecoinDatasetId || null,
+        storageType: uploadResult.storageType,
         gatewayUrl: uploadResult.gatewayUrl,
-        gateways,
-        explorerUrl,
-        proofBadge: datasetId
-          ? { dataSetId: datasetId, verified: true }
-          : null,
-        marketplaceUrl: `/skills/${slug}`,
-        installCmd: `skillcoin install ${slug}`,
-      },
+      }),
     });
   } catch (error: any) {
     console.error("[Upload] Error:", error);
@@ -175,6 +200,91 @@ upload.post("/", async (c) => {
     }
 
     return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * POST /api/skills/register-upload
+ *
+ * Register a pre-uploaded Filecoin asset in the marketplace DB.
+ * Used by the CLI `filecoin-pin` flow after obtaining a real root CID/piece CID.
+ */
+upload.post("/register-upload", async (c) => {
+  try {
+    const body = await c.req.json();
+    const parsed = RegisterUploadedSkillSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        { success: false, error: "Invalid metadata", details: parsed.error.flatten() },
+        400
+      );
+    }
+
+    const metadata = parsed.data;
+    const user = c.get("user");
+    let creatorAddress: string;
+    if (user?.address) {
+      creatorAddress = user.address;
+    } else if (process.env.NODE_ENV === "development") {
+      creatorAddress = metadata.creatorAddress;
+    } else {
+      return c.json({ success: false, error: "Authentication required" }, 401);
+    }
+
+    const slug = metadata.name
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .replace(/-{2,}/g, "-");
+
+    if (!slug) {
+      return c.json({ success: false, error: "Skill name produces an empty slug" }, 400);
+    }
+
+    const existingSkill = await SkillService.getSkillBySlugInternal(slug);
+    if (existingSkill) {
+      return c.json(
+        { success: false, error: `A skill named "${metadata.name}" already exists` },
+        409
+      );
+    }
+
+    const skill = await SkillService.createSkill({
+      name: metadata.name,
+      slug,
+      description: metadata.description,
+      version: metadata.version,
+      category: metadata.category,
+      tags: metadata.tags,
+      zipCid: metadata.cid,
+      filecoinDealId:
+        metadata.filecoinDealId ||
+        (metadata.filecoinDatasetId ? `dataset-${metadata.filecoinDatasetId}` : undefined),
+      pieceCid: metadata.pieceCid || metadata.cid,
+      filecoinDatasetId: metadata.filecoinDatasetId,
+      creatorAddress,
+      priceAmount: metadata.price,
+      priceCurrency: metadata.currency,
+      storageType: metadata.storageType,
+    });
+
+    return c.json({
+      success: true,
+      data: buildUploadResponse({
+        skill,
+        cid: metadata.cid,
+        pieceCid: metadata.pieceCid || metadata.cid,
+        filecoinDatasetId: metadata.filecoinDatasetId || null,
+        storageType: metadata.storageType,
+        gatewayUrl: metadata.storageType === "filecoin" ? "" : `/uploads/${metadata.cid}`,
+      }),
+    });
+  } catch (error: any) {
+    console.error("[RegisterUpload] Error:", error);
+    return c.json(
+      { success: false, error: process.env.NODE_ENV === "development" ? error.message : "Internal server error" },
+      500
+    );
   }
 });
 

@@ -57,7 +57,7 @@ export async function selectProjectSkills(
         tags: skill.tags,
       }));
 
-    const combined = [...ranked];
+    const combined: SelectedProjectSkill[] = [...ranked];
     if (!combined.some((item) => item.name === `${spec.name}-project-context`)) {
       combined.push(...fallback.slice(0, 1));
     }

@@ -3,19 +3,20 @@ import chalk from "chalk";
 import ora from "ora";
 import * as fs from "fs";
 import * as path from "path";
-import { uploadSkill } from "../lib/api";
+import { registerUploadedSkill, uploadSkill } from "../lib/api";
 import { readConfig } from "../lib/config";
 import { uploadWithFilecoinPin, isFilecoinPinAvailable } from "../lib/filecoin-pin";
 
 export function publishCommand(program: Command) {
   program
     .command("publish <file>")
-    .description("Publish a .md skill file to the Skillcoin marketplace")
+    .description("Publish a .md, .txt, or .zip skill file to the Skillcoin marketplace")
     .option("-n, --name <name>", "Skill name (defaults to filename)")
     .option("-d, --desc <description>", "Skill description")
     .option("-c, --category <category>", "Category (coding, marketing, research, etc.)", "coding")
     .option("-t, --tags <tags>", "Comma-separated tags", "")
-    .option("-p, --price <price>", "Price in USDC", "0.5")
+    .option("-p, --price <price>", "Price amount", "0.5")
+    .option("--currency <currency>", "Price currency (USDC | TFIL | FREE)", "USDC")
     .option("-v, --version <version>", "Skill version", "1.0.0")
     .option("-s, --storage <method>", "Storage method: api (default) or filecoin-pin", "api")
     .action(async (file: string, options: any) => {
@@ -33,8 +34,8 @@ export function publishCommand(program: Command) {
         return;
       }
 
-      if (!filePath.endsWith(".md") && !filePath.endsWith(".txt")) {
-        console.log(chalk.red("  ✗ Only .md and .txt files are supported"));
+      if (!filePath.endsWith(".md") && !filePath.endsWith(".txt") && !filePath.endsWith(".zip")) {
+        console.log(chalk.red("  ✗ Only .md, .txt, and .zip files are supported"));
         console.log();
         return;
       }
@@ -51,7 +52,7 @@ export function publishCommand(program: Command) {
       console.log(chalk.white(`  File:     ${chalk.cyan(filename)} (${fileSize} KB)`));
       console.log(chalk.white(`  Skill:    ${chalk.cyan(skillName)}`));
       console.log(chalk.white(`  Version:  ${options.version}`));
-      console.log(chalk.white(`  Price:    ${options.price} USDC`));
+      console.log(chalk.white(`  Price:    ${options.price} ${options.currency}`));
       console.log(chalk.white(`  Category: ${options.category}`));
       console.log();
 
@@ -60,7 +61,7 @@ export function publishCommand(program: Command) {
         : [];
 
       if (options.storage === "filecoin-pin") {
-        // Direct upload via filecoin-pin (no API server needed)
+        // Upload via filecoin-pin, then register the uploaded CID with the marketplace if API is configured.
         const spinner = ora({
           text: chalk.dim("Uploading to Filecoin via filecoin-pin..."),
           color: "cyan",
@@ -72,7 +73,53 @@ export function publishCommand(program: Command) {
             throw new Error("filecoin-pin not available. Run: pnpm add filecoin-pin");
           }
 
-          const result = await uploadWithFilecoinPin(filePath);
+          const uploadResult = await uploadWithFilecoinPin(filePath);
+          const metadata = {
+            name: skillName,
+            description,
+            category: options.category,
+            tags,
+            price: parseFloat(options.price) || 0,
+            currency: options.currency,
+            version: options.version,
+            creatorAddress: config.wallet || "0x0000000000000000000000000000000000000000",
+          };
+
+          let result: any = {
+            cid: uploadResult.rootCid,
+            pieceCid: uploadResult.pieceCid,
+            filecoinDatasetId: uploadResult.dataSetId,
+            filecoinDealId: uploadResult.dataSetId ? `dataset-${uploadResult.dataSetId}` : undefined,
+            storageType: "filecoin",
+            slug: skillName,
+            installCmd: `skillcoin install ${skillName}`,
+            network: uploadResult.network,
+            gateways: [
+              `https://ipfs.io/ipfs/${uploadResult.rootCid}`,
+              `https://w3s.link/ipfs/${uploadResult.rootCid}`,
+              `https://cloudflare-ipfs.com/ipfs/${uploadResult.rootCid}`,
+            ],
+          };
+
+          if (config.apiBase) {
+            try {
+              const registered = await registerUploadedSkill({
+                cid: uploadResult.rootCid,
+                pieceCid: uploadResult.pieceCid,
+                filecoinDatasetId: uploadResult.dataSetId || undefined,
+                filecoinDealId: uploadResult.dataSetId
+                  ? `dataset-${uploadResult.dataSetId}`
+                  : undefined,
+                storageType: "filecoin",
+                metadata,
+              });
+              result = { ...result, ...registered };
+            } catch (registrationError: any) {
+              spinner.warn(chalk.yellow("Uploaded to Filecoin, but marketplace registration failed"));
+              console.log(chalk.dim(`  Registration error: ${registrationError.message}`));
+              console.log();
+            }
+          }
           spinner.stop();
 
           console.log();
@@ -80,28 +127,39 @@ export function publishCommand(program: Command) {
           console.log();
           console.log(chalk.white("  Storage Details"));
           console.log(chalk.dim("  ───────────────────────────────────"));
-          console.log(chalk.dim(`  Root CID:    ${chalk.white(result.rootCid)}`));
+          console.log(chalk.dim(`  Root CID:    ${chalk.white(result.cid || uploadResult.rootCid)}`));
           if (result.pieceCid) {
             console.log(chalk.dim(`  Piece CID:   ${chalk.white(result.pieceCid)}`));
           }
-          if (result.dataSetId) {
-            console.log(chalk.dim(`  Dataset ID:  ${chalk.white(String(result.dataSetId))}`));
+          if (result.filecoinDatasetId || uploadResult.dataSetId) {
+            console.log(
+              chalk.dim(
+                `  Dataset ID:  ${chalk.white(String(result.filecoinDatasetId || uploadResult.dataSetId))}`
+              )
+            );
           }
-          console.log(chalk.dim(`  Network:     ${chalk.white(result.network || "calibration")}`));
+          console.log(chalk.dim(`  Network:     ${chalk.white(result.network || uploadResult.network || "calibration")}`));
           console.log();
           console.log(chalk.white("  Access URLs (use any to download)"));
           console.log(chalk.dim("  ───────────────────────────────────"));
-          console.log(chalk.dim(`  IPFS:     ${chalk.cyan(`https://ipfs.io/ipfs/${result.rootCid}`)}`));
-          console.log(chalk.dim(`  W3S:      ${chalk.cyan(`https://w3s.link/ipfs/${result.rootCid}`)}`));
-          console.log(chalk.dim(`  CF:       ${chalk.cyan(`https://cloudflare-ipfs.com/ipfs/${result.rootCid}`)}`));
-          if (result.dataSetId) {
+          console.log(chalk.dim(`  IPFS:     ${chalk.cyan(`https://ipfs.io/ipfs/${result.cid || uploadResult.rootCid}`)}`));
+          console.log(chalk.dim(`  W3S:      ${chalk.cyan(`https://w3s.link/ipfs/${result.cid || uploadResult.rootCid}`)}`));
+          console.log(chalk.dim(`  CF:       ${chalk.cyan(`https://cloudflare-ipfs.com/ipfs/${result.cid || uploadResult.rootCid}`)}`));
+          if (result.filecoinDatasetId || uploadResult.dataSetId) {
             console.log();
             console.log(chalk.white("  Filecoin Proof"));
             console.log(chalk.dim("  ───────────────────────────────────"));
-            console.log(chalk.dim(`  Explorer: ${chalk.cyan(`https://pdp.vxb.ai/calibration/dataset/${result.dataSetId}`)}`));
+            console.log(
+              chalk.dim(
+                `  Explorer: ${chalk.cyan(`https://pdp.vxb.ai/calibration/dataset/${result.filecoinDatasetId || uploadResult.dataSetId}`)}`
+              )
+            );
           }
           console.log();
-          console.log(chalk.dim("  Install:  ") + chalk.cyan(`skillcoin install ${skillName}`));
+          console.log(chalk.dim("  Install:  ") + chalk.cyan(result.installCmd || `skillcoin install ${skillName}`));
+          if (result.marketplaceUrl && config.apiBase) {
+            console.log(chalk.dim("  View:     ") + chalk.cyan(`${config.apiBase}${result.marketplaceUrl}`));
+          }
           console.log();
         } catch (error: any) {
           spinner.fail(chalk.red("Upload failed"));
@@ -125,7 +183,7 @@ export function publishCommand(program: Command) {
               category: options.category,
               tags,
               price: parseFloat(options.price) || 0,
-              currency: "USDC",
+              currency: options.currency,
               version: options.version,
               creatorAddress: config.wallet || "0x0000000000000000000000000000000000000000",
             },
@@ -134,7 +192,11 @@ export function publishCommand(program: Command) {
 
           spinner.stop();
 
-          console.log(chalk.bold.green("  ✓ Skill stored on Filecoin permanently"));
+          const storedMessage =
+            result.storageType === "local"
+              ? "  ✓ Skill stored in local development storage"
+              : "  ✓ Skill stored on Filecoin permanently";
+          console.log(chalk.bold.green(storedMessage));
           console.log();
           console.log(chalk.white("  Storage Details"));
           console.log(chalk.dim("  ───────────────────────────────────"));
@@ -152,7 +214,7 @@ export function publishCommand(program: Command) {
           console.log(chalk.white("  Access URLs (use any to download)"));
           console.log(chalk.dim("  ───────────────────────────────────"));
           if (result.gateways && result.gateways.length > 0) {
-            const labels = ["IPFS", "W3S", "CF"];
+            const labels = result.storageType === "local" ? ["LOCAL"] : ["IPFS", "W3S", "CF"];
             result.gateways.forEach((url: string, i: number) => {
               const label = (labels[i] || `GW${i + 1}`).padEnd(7);
               console.log(chalk.dim(`  ${label} ${chalk.cyan(url)}`));

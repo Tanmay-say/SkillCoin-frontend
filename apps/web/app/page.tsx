@@ -67,7 +67,7 @@ export default function HomePage() {
           </p>
 
           <div className="max-w-md mx-auto mb-10 animate-slide-up" style={{ animationDelay: "0.2s" }}>
-            <InstallCommand name={skills.length > 0 ? skills[0].name : "your-skill"} />
+            <InstallCommand name={skills.length > 0 ? skills[0].slug : "your-skill"} />
           </div>
 
           <div

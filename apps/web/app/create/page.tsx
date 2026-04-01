@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { uploadSkill } from "@/lib/api";
+import { loginWithWallet, requestAuthNonce, uploadSkill } from "@/lib/api";
 import FilecoinProofBadge from "@/components/FilecoinProofBadge";
 import {
   Upload, CheckCircle, Loader2, AlertCircle,
@@ -19,6 +19,9 @@ export default function CreatePage() {
   const [uploadProgress, setUploadProgress] = useState("");
   const [result, setResult] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [authToken, setAuthToken] = useState("");
+  const [walletAddress, setWalletAddress] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
 
   // AI generation state
   const [aiDescription, setAiDescription] = useState("");
@@ -38,6 +41,16 @@ export default function CreatePage() {
     version: "1.0.0",
     creatorAddress: "",
   });
+
+  useEffect(() => {
+    const savedToken = window.localStorage.getItem("skillcoin.authToken") || "";
+    const savedWallet = window.localStorage.getItem("skillcoin.walletAddress") || "";
+    setAuthToken(savedToken);
+    setWalletAddress(savedWallet);
+    if (savedWallet) {
+      setForm((current) => ({ ...current, creatorAddress: savedWallet }));
+    }
+  }, []);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -90,11 +103,12 @@ export default function CreatePage() {
 
       setUploadProgress("Storing permanently on Filecoin with PDP proofs...");
 
-      const data = await uploadSkill(formData);
+      const data = await uploadSkill(formData, authToken || undefined);
 
       setUploadProgress("Published to marketplace!");
       setResult({
         skillId: data.skillId,
+        slug: data.slug,
         cid: data.cid,
         pieceCid: data.pieceCid,
         filecoinDatasetId: data.filecoinDatasetId,
@@ -132,7 +146,10 @@ export default function CreatePage() {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
       const res = await fetch(`${apiUrl}/api/skills/generate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
         body: JSON.stringify({ description: aiDescription, category: form.category }),
       });
       const data = await res.json();
@@ -161,6 +178,46 @@ export default function CreatePage() {
     setAiExpanded(false);
   };
 
+  const handleConnectWallet = async () => {
+    const eth = (window as any).ethereum;
+    if (!eth) {
+      setErrorMsg("MetaMask or another injected wallet is required for authenticated publishing.");
+      setStep("error");
+      return;
+    }
+
+    setAuthLoading(true);
+    try {
+      const [address] = (await eth.request({
+        method: "eth_requestAccounts",
+      })) as string[];
+      if (!address) {
+        throw new Error("No wallet address returned");
+      }
+
+      const nonce = await requestAuthNonce(address);
+      const signature = await eth.request({
+        method: "personal_sign",
+        params: [nonce, address],
+      });
+      const session = await loginWithWallet(address, signature, nonce);
+
+      window.localStorage.setItem("skillcoin.authToken", session.token);
+      window.localStorage.setItem("skillcoin.walletAddress", session.user.walletAddress);
+      setAuthToken(session.token);
+      setWalletAddress(session.user.walletAddress);
+      setForm((current) => ({
+        ...current,
+        creatorAddress: session.user.walletAddress,
+      }));
+    } catch (error: any) {
+      setErrorMsg(error?.message || "Wallet authentication failed");
+      setStep("error");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   return (
     <main className="min-h-screen">
       <Navbar />
@@ -175,6 +232,27 @@ export default function CreatePage() {
               Upload your AI skill instructions as a <strong>.md</strong> file.
               Stored permanently on <span className="text-green-400 font-medium">Filecoin</span> with cryptographic proof.
             </p>
+          </div>
+
+          <div className="glass rounded-2xl p-5 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold">
+                {walletAddress ? "Wallet connected" : "Connect wallet for publishing"}
+              </p>
+              <p className="text-xs text-text-muted mt-1">
+                {walletAddress
+                  ? walletAddress
+                  : "Production uploads require a signed Skillcoin session. Local development can still use a manual creator address."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleConnectWallet}
+              disabled={authLoading}
+              className="btn-secondary !py-2.5 !px-4 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {authLoading ? "Connecting..." : walletAddress ? "Reconnect Wallet" : "Connect Wallet"}
+            </button>
           </div>
 
           {step === "form" && (
@@ -309,7 +387,7 @@ export default function CreatePage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Price (USDC)</label>
+                    <label className="block text-sm font-medium mb-2">Price</label>
                     <input
                       type="number"
                       step="0.01"
@@ -318,6 +396,19 @@ export default function CreatePage() {
                       onChange={(e) => setForm({ ...form, price: e.target.value })}
                       className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/6 text-sm focus:outline-none focus:border-brand-purple/50 transition-colors"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Currency</label>
+                    <select
+                      value={form.currency}
+                      onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                      className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/6 text-sm focus:outline-none focus:border-brand-purple/50 appearance-none cursor-pointer"
+                    >
+                      <option value="USDC">USDC</option>
+                      <option value="TFIL">TFIL</option>
+                      <option value="FREE">FREE</option>
+                    </select>
                   </div>
 
                   <div>
@@ -348,7 +439,7 @@ export default function CreatePage() {
 
               {/* File Upload */}
               <div className="glass rounded-2xl p-6">
-                <h3 className="text-sm font-semibold text-text-secondary mb-4">Skill File (.md)</h3>
+                <h3 className="text-sm font-semibold text-text-secondary mb-4">Skill File (.md or .zip)</h3>
 
                 <div
                   onDragEnter={handleDrag}
@@ -365,7 +456,7 @@ export default function CreatePage() {
                 >
                   <input
                     type="file"
-                    accept=".md,.txt"
+                    accept=".md,.txt,.zip"
                     onChange={handleFileChange}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   />
@@ -389,10 +480,10 @@ export default function CreatePage() {
                     <>
                       <Upload className="w-10 h-10 text-text-muted mx-auto mb-3" />
                       <p className="text-sm text-text-secondary mb-1">
-                        Drop your <strong>.md</strong> file here or click to browse
+                        Drop your <strong>.md</strong> or <strong>.zip</strong> file here or click to browse
                       </p>
                       <p className="text-xs text-text-muted">
-                        Markdown file with your AI skill instructions (max 10MB)
+                        Markdown or ZIP package with your skill files (max 10MB)
                       </p>
                     </>
                   )}
@@ -453,7 +544,7 @@ export default function CreatePage() {
                 )}
                 <div className="flex justify-between text-sm">
                   <span className="text-text-muted">Install:</span>
-                  <code className="text-brand-cyan font-mono text-xs">skillcoin install {result.name}</code>
+                  <code className="text-brand-cyan font-mono text-xs">skillcoin install {result.slug || result.name}</code>
                 </div>
                 {result.gatewayUrl && (
                   <div className="pt-2 border-t border-white/5 flex flex-col gap-1">

@@ -23,8 +23,10 @@ export interface Skill {
   version: string;
   category: string | null;
   tags: string[];
-  zipCid: string;
+  zipCid: string | null;
   manifestCid: string | null;
+  pieceCid?: string | null;
+  filecoinDatasetId?: number | null;
   filecoinDealId: string | null;
   creatorAddress: string;
   priceAmount: string;  // Prisma Decimal serializes as string
@@ -33,6 +35,7 @@ export interface Skill {
   published: boolean;
   fvmContractId: string | null;
   storageType?: "filecoin" | "local"; // "local" means not yet on-chain
+  hasContent?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -85,9 +88,34 @@ export async function searchSkills(
   return data.data;
 }
 
-export async function uploadSkill(formData: FormData): Promise<any> {
+export async function uploadSkill(formData: FormData, authToken?: string): Promise<any> {
+  const headers: Record<string, string> = {
+    "Content-Type": "multipart/form-data",
+  };
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+
   const { data } = await api.post("/api/skills/upload", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
+    headers,
+  });
+  return data.data;
+}
+
+export async function requestAuthNonce(address: string): Promise<string> {
+  const { data } = await api.get("/api/auth/nonce", { params: { address } });
+  return data.data.nonce;
+}
+
+export async function loginWithWallet(
+  address: string,
+  signature: string,
+  nonce: string
+): Promise<{ token: string; user: { walletAddress: string } }> {
+  const { data } = await api.post("/api/auth/login", {
+    address,
+    signature,
+    nonce,
   });
   return data.data;
 }

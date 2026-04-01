@@ -101,19 +101,44 @@ export function saveSkill(
 ): string {
   const skillsDir = getSkillsDir();
   const skillDir = path.join(skillsDir, skillName);
+  const isZip = isZipArchive(buffer) || filename.toLowerCase().endsWith(".zip");
 
   // Create skill directory
   if (!fs.existsSync(skillDir)) {
     fs.mkdirSync(skillDir, { recursive: true });
   }
 
-  // Save the skill file
-  const filePath = path.join(skillDir, filename);
-  fs.writeFileSync(filePath, buffer);
+  let originalFile = filename;
+  let extractedFiles: string[] = [];
 
-  // Also save as SKILL.md if it's a markdown file
-  if (filename.endsWith(".md") && filename !== "SKILL.md") {
-    fs.writeFileSync(path.join(skillDir, "SKILL.md"), buffer);
+  if (isZip) {
+    const archiveName = filename.toLowerCase().endsWith(".zip")
+      ? filename
+      : `${skillName}.zip`;
+    const archivePath = path.join(skillDir, archiveName);
+    fs.writeFileSync(archivePath, buffer);
+    originalFile = archiveName;
+
+    try {
+      // Use sync extraction so installs remain deterministic from the CLI.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const AdmZip = require("adm-zip");
+      const zip = new AdmZip(buffer);
+      const entries = zip.getEntries();
+      extractedFiles = entries
+        .filter((entry: any) => !entry.isDirectory)
+        .map((entry: any) => entry.entryName);
+      zip.extractAllTo(skillDir, true);
+    } catch (error: any) {
+      throw new Error(`Downloaded ZIP could not be extracted: ${error.message || "unknown error"}`);
+    }
+  } else {
+    const filePath = path.join(skillDir, filename);
+    fs.writeFileSync(filePath, buffer);
+
+    if (filename.endsWith(".md") && filename !== "SKILL.md") {
+      fs.writeFileSync(path.join(skillDir, "SKILL.md"), buffer);
+    }
   }
 
   // Save manifest
@@ -123,7 +148,9 @@ export function saveSkill(
     cid: metadata.cid,
     description: metadata.description || "",
     category: metadata.category || "",
-    originalFile: filename,
+    originalFile,
+    packageType: isZip ? "zip" : "markdown",
+    extractedFiles,
     installedAt: new Date().toISOString(),
   };
   fs.writeFileSync(
@@ -132,6 +159,16 @@ export function saveSkill(
   );
 
   return skillDir;
+}
+
+function isZipArchive(buffer: Buffer): boolean {
+  return (
+    buffer.length >= 4 &&
+    buffer[0] === 0x50 &&
+    buffer[1] === 0x4b &&
+    buffer[2] === 0x03 &&
+    buffer[3] === 0x04
+  );
 }
 
 /**

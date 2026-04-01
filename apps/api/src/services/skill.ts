@@ -7,7 +7,7 @@ const UpdateSkillSchema = z.object({
   category: z.string().optional(),
   tags: z.array(z.string()).optional(),
   priceAmount: z.number().min(0).optional(),
-  priceCurrency: z.enum(["USDC", "FLOW", "FREE"]).optional(),
+  priceCurrency: z.enum(["USDC", "TFIL", "FREE"]).optional(),
 }).strict(); // strict() rejects any extra fields
 
 export class SkillService {
@@ -56,7 +56,7 @@ export class SkillService {
         filecoinDatasetId: data.filecoinDatasetId,
         creatorAddress: data.creatorAddress,
         priceAmount: data.priceAmount ?? 0.5,
-        priceCurrency: data.priceCurrency || "USDC",
+        priceCurrency: data.priceAmount === 0 ? "FREE" : (data.priceCurrency || "USDC"),
         storageType: data.storageType,
         published: true,
       },
@@ -147,10 +147,14 @@ export class SkillService {
    * Full-text search skills
    * DB-03: limit is capped at 100 in the service layer
    */
-  static async searchSkills(query: string, page = 1, limit = 20) {
-    const skip = (page - 1) * limit;
+  static async searchSkills(
+    query: string,
+    page = 1,
+    limit = 20,
+    category?: string
+  ) {
     const cappedLimit = Math.min(limit, 100); // DB-03: cap in service layer
-    // MED-BUG-01 FIX: removed unused `searchTerm` variable
+    const skip = (page - 1) * cappedLimit;
 
     const where: Record<string, any> = {
       published: true,
@@ -160,6 +164,10 @@ export class SkillService {
         { tags: { hasSome: [query.toLowerCase()] } },
       ],
     };
+
+    if (category) {
+      where.category = category;
+    }
 
     const [skills, total] = await Promise.all([
       prisma.skill.findMany({

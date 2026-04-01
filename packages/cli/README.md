@@ -70,9 +70,9 @@ Options:
 
 If a skill has a price, the CLI opens a browser payment page at `localhost:7402`. Connect MetaMask, pay in the listed currency on the correct network, and the CLI resumes automatically after confirmation.
 
-### `skillcoin publish <file.md>`
+### `skillcoin publish <file>`
 
-Publish a `.md` skill file to the marketplace. The file is uploaded to Filecoin via the Synapse SDK and stored permanently with IPFS-compatible CIDs.
+Publish a `.md`, `.txt`, or `.zip` skill file to the marketplace. The file is uploaded to Filecoin via the Synapse SDK and stored permanently with IPFS-compatible CIDs.
 
 ```
 $ skillcoin publish my-skill.md --price 0.5 --category coding
@@ -105,7 +105,8 @@ Options:
 - `-n, --name <name>` — Custom skill name (defaults to filename)
 - `-d, --desc <description>` — Skill description
 - `-c, --category <category>` — Category (coding, marketing, research, etc.)
-- `-p, --price <price>` — Price in USDC (default: 0.5)
+- `-p, --price <price>` — Price amount (default: 0.5)
+- `--currency <currency>` — `USDC`, `TFIL`, or `FREE` (default: `USDC`)
 - `-t, --tags <tags>` — Comma-separated tags
 - `-v, --version <version>` — Version string (default: 1.0.0)
 - `-s, --storage <method>` — `api` (default) or `filecoin-pin` for direct Filecoin upload

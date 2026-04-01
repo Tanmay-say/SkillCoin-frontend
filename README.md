@@ -61,7 +61,7 @@ skillcoin/
 | Frontend | Next.js 14, Tailwind CSS, shadcn/ui, Framer Motion |
 | CLI | Commander.js, Ora, Chalk |
 | Storage | Lighthouse SDK, Filecoin Calibration |
-| Payments | x402 HTTP micropayments (USDC) |
+| Payments | x402 HTTP micropayments (USDC or TFIL) |
 | Blockchain | Flow testnet (optional license NFTs) |
 
 ## License

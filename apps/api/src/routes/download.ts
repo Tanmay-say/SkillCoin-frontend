@@ -2,37 +2,12 @@ import { Hono } from "hono";
 import { PaymentService } from "../services/payment";
 import { SkillService } from "../services/skill";
 import { FilecoinStorageService } from "../services/filecoin-storage";
-import { generateDownloadToken, type AuthUser } from "../middleware/auth";
+import {
+  generateDownloadToken,
+  verifyDownloadToken,
+  type AuthUser,
+} from "../middleware/auth";
 import { VerifyPaymentSchema } from "../types";
-
-const IPFS_GATEWAYS = [
-  "https://ipfs.io/ipfs",
-  "https://w3s.link/ipfs",
-  "https://cloudflare-ipfs.com/ipfs",
-];
-
-function buildAccessInfo(skill: any, reqUrl: string) {
-  const cid = skill.zipCid;
-  const origin = new URL(reqUrl).origin;
-  const downloadUrl = `${origin}/api/skills/${skill.slug}/content`;
-  const gateways = IPFS_GATEWAYS.map((gw) => `${gw}/${cid}`);
-
-  const access: Record<string, any> = {
-    cid,
-    downloadUrl,
-    storageType: skill.storageType || "filecoin",
-    gateways,
-  };
-
-  if (skill.pieceCid) access.pieceCid = skill.pieceCid;
-  if (skill.filecoinDatasetId) {
-    access.filecoinDatasetId = skill.filecoinDatasetId;
-    access.proofUrl = `https://pdp.vxb.ai/calibration/dataset/${skill.filecoinDatasetId}`;
-  }
-  if (skill.filecoinDealId) access.dealId = skill.filecoinDealId;
-
-  return access;
-}
 
 type Variables = { user: AuthUser };
 const download = new Hono<{ Variables: Variables }>();
@@ -40,9 +15,8 @@ const download = new Hono<{ Variables: Variables }>();
 /**
  * GET /api/skills/:slug/download
  *
- * x402 Payment Gate:
- * - Free skills: return download URL directly
- * - Paid skills: require auth + payment proof
+ * Free skills return a direct content URL.
+ * Paid skills require authentication and return a signed payment challenge first.
  */
 download.get("/:slug/download", async (c) => {
   try {
@@ -53,21 +27,17 @@ download.get("/:slug/download", async (c) => {
       return c.json({ success: false, error: "Skill not found" }, 404);
     }
 
-    const access = buildAccessInfo(skill, c.req.url);
-
-    // Free skill — no auth required
     if (Number(skill.priceAmount) === 0 || skill.priceCurrency === "FREE") {
       await SkillService.incrementDownloads(skill.id);
       return c.json({
         success: true,
         data: {
-          ...access,
+          ...PaymentService.buildAccessInfo(skill, c.req.url),
           free: true,
         },
       });
     }
 
-    // CRIT-03 FIX: Require authentication for paid downloads
     const user = c.get("user");
     if (!user?.userId) {
       return c.json(
@@ -76,7 +46,6 @@ download.get("/:slug/download", async (c) => {
       );
     }
 
-    // Check if already purchased
     const alreadyPurchased = await PaymentService.isAlreadyPurchased(
       user.userId,
       skill.id
@@ -87,7 +56,7 @@ download.get("/:slug/download", async (c) => {
       return c.json({
         success: true,
         data: {
-          ...access,
+          ...PaymentService.buildAccessInfo(skill, c.req.url, token),
           token,
           expiresIn: 300,
           alreadyPurchased: true,
@@ -95,100 +64,38 @@ download.get("/:slug/download", async (c) => {
       });
     }
 
-    // Check for payment proof header
-    const paymentProof = c.req.header("X-Payment-Proof");
-
-    if (!paymentProof) {
-      // Return 402 Payment Required
-      const challenge = PaymentService.createChallenge(
-        skill.slug,
-        skill.priceAmount.toString(),
-        skill.priceCurrency
-      );
-
-      const challengeBase64 = Buffer.from(JSON.stringify(challenge)).toString("base64");
-      c.header("X-Payment-Request", challengeBase64);
-
-      return c.json(
-        {
-          error: "payment_required",
-          amount: Number(skill.priceAmount),
-          currency: skill.priceCurrency,
-          recipient: process.env.ADMIN_VAULT_ADDRESS,
-          skillSlug: skill.slug,
-          skillName: skill.name,
-        },
-        402
-      );
-    }
-
-    // Verify payment proof
-    const txHash = paymentProof;
-
-    const txParsed = VerifyPaymentSchema.safeParse({ txHash });
-    if (!txParsed.success) {
-      return c.json(
-        { success: false, error: "Invalid transaction hash format" },
-        400
-      );
-    }
-
-    const isReplay = await PaymentService.isReplayAttack(txHash);
-    if (isReplay) {
-      return c.json({ success: false, error: "Payment already used" }, 400);
-    }
-
-    const verification = await PaymentService.verifyPayment(
-      txHash,
-      Number(skill.priceAmount),
-      skill.priceCurrency
-    );
-
-    if (!verification.valid) {
-      const challenge = PaymentService.createChallenge(
-        skill.slug,
-        skill.priceAmount.toString(),
-        skill.priceCurrency
-      );
-      const challengeBase64 = Buffer.from(JSON.stringify(challenge)).toString("base64");
-      c.header("X-Payment-Request", challengeBase64);
-
-      return c.json(
-        {
-          error: "payment_invalid",
-          message: "Payment verification failed. Please try again.",
-          amount: Number(skill.priceAmount),
-          currency: skill.priceCurrency,
-          recipient: process.env.ADMIN_VAULT_ADDRESS,
-        },
-        402
-      );
-    }
-
-    // Payment verified — record purchase with real userId
-    await PaymentService.markPurchased(
-      user.userId,
-      skill.id,
-      txHash,
-      Number(skill.priceAmount),
-      skill.priceCurrency
-    );
-
-    await SkillService.incrementDownloads(skill.id);
-
-    const token = generateDownloadToken(skill.id, user.userId, skill.zipCid);
-
-    return c.json({
-      success: true,
-      data: {
-        ...access,
-        token,
-        expiresIn: 300,
-      },
+    const challenge = PaymentService.createChallenge({
+      skillId: skill.id,
+      skillSlug: skill.slug,
+      userId: user.userId,
+      payerAddress: user.address,
+      amount: skill.priceAmount.toString(),
+      currency: skill.priceCurrency,
     });
+
+    c.header(
+      "X-Payment-Request",
+      Buffer.from(JSON.stringify(challenge)).toString("base64")
+    );
+
+    return c.json(
+      {
+        error: "payment_required",
+        challenge,
+        amount: Number(skill.priceAmount),
+        currency: skill.priceCurrency,
+        recipient: challenge.recipient,
+        skillSlug: skill.slug,
+        skillName: skill.name,
+      },
+      402
+    );
   } catch (error: any) {
     console.error("[Download] Error:", error);
-    const msg = process.env.NODE_ENV === "development" ? error.message : "Internal server error";
+    const msg =
+      process.env.NODE_ENV === "development"
+        ? error.message
+        : "Internal server error";
     return c.json({ success: false, error: msg }, 500);
   }
 });
@@ -196,7 +103,7 @@ download.get("/:slug/download", async (c) => {
 /**
  * POST /api/skills/:slug/verify-payment
  *
- * Requires authentication for paid skill verification.
+ * Requires authentication and a valid signed challenge token.
  */
 download.post("/:slug/verify-payment", async (c) => {
   try {
@@ -206,7 +113,11 @@ download.post("/:slug/verify-payment", async (c) => {
     const parsed = VerifyPaymentSchema.safeParse(body);
     if (!parsed.success) {
       return c.json(
-        { success: false, error: "Invalid request", details: parsed.error.flatten() },
+        {
+          success: false,
+          error: "Invalid request",
+          details: parsed.error.flatten(),
+        },
         400
       );
     }
@@ -216,7 +127,6 @@ download.post("/:slug/verify-payment", async (c) => {
       return c.json({ success: false, error: "Skill not found" }, 404);
     }
 
-    // CRIT-03: Require auth for payment verification
     const user = c.get("user");
     if (!user?.userId) {
       return c.json(
@@ -225,16 +135,39 @@ download.post("/:slug/verify-payment", async (c) => {
       );
     }
 
+    if (!parsed.data.challengeToken) {
+      return c.json(
+        { success: false, error: "challengeToken is required" },
+        400
+      );
+    }
+
     const isReplay = await PaymentService.isReplayAttack(parsed.data.txHash);
     if (isReplay) {
       return c.json({ success: false, error: "Payment already used" }, 400);
     }
 
-    const verification = await PaymentService.verifyPayment(
-      parsed.data.txHash,
-      Number(skill.priceAmount),
-      skill.priceCurrency
-    );
+    let challenge;
+    try {
+      challenge = PaymentService.verifyChallengeToken(
+        parsed.data.challengeToken,
+        user.userId
+      );
+      PaymentService.validateChallengeForSkill(challenge, skill, user.address);
+    } catch (error: any) {
+      return c.json({ success: false, error: error.message }, 400);
+    }
+
+    const verification = await PaymentService.verifyPayment({
+      txHash: parsed.data.txHash,
+      expectedAmount: Number(skill.priceAmount),
+      currency: skill.priceCurrency,
+      expectedRecipient: challenge.recipient,
+      expectedPayer: challenge.payerAddress,
+      tokenAddress: challenge.tokenAddress,
+      tokenDecimals: challenge.tokenDecimals,
+      verifyRpcUrl: challenge.verifyRpcUrl,
+    });
 
     if (!verification.valid) {
       return c.json(
@@ -253,20 +186,22 @@ download.post("/:slug/verify-payment", async (c) => {
 
     await SkillService.incrementDownloads(skill.id);
 
-    const access = buildAccessInfo(skill, c.req.url);
     const token = generateDownloadToken(skill.id, user.userId, skill.zipCid);
 
     return c.json({
       success: true,
       data: {
-        ...access,
+        ...PaymentService.buildAccessInfo(skill, c.req.url, token),
         token,
         expiresIn: 300,
       },
     });
   } catch (error: any) {
     console.error("[VerifyPayment] Error:", error);
-    const msg = process.env.NODE_ENV === "development" ? error.message : "Internal server error";
+    const msg =
+      process.env.NODE_ENV === "development"
+        ? error.message
+        : "Internal server error";
     return c.json({ success: false, error: msg }, 500);
   }
 });
@@ -274,9 +209,7 @@ download.post("/:slug/verify-payment", async (c) => {
 /**
  * GET /api/skills/:slug/content
  *
- * Streams skill content via Synapse piece retrieval.
- * For paid skills, requires either a valid auth session with purchase
- * or a short-lived download token from /download.
+ * Paid skills accept a short-lived download token returned by /download or /verify-payment.
  */
 download.get("/:slug/content", async (c) => {
   try {
@@ -286,33 +219,80 @@ download.get("/:slug/content", async (c) => {
       return c.json({ success: false, error: "Skill not found" }, 404);
     }
 
-    const isFree = Number(skill.priceAmount) === 0 || skill.priceCurrency === "FREE";
+    const isFree =
+      Number(skill.priceAmount) === 0 || skill.priceCurrency === "FREE";
     if (!isFree) {
-      const user = c.get("user");
-      if (!user?.userId) {
-        return c.json({ success: false, error: "Authentication required for paid downloads" }, 401);
-      }
-      const alreadyPurchased = await PaymentService.isAlreadyPurchased(user.userId, skill.id);
-      if (!alreadyPurchased) {
-        return c.json({ success: false, error: "Payment required before content download" }, 402);
+      const token =
+        c.req.query("token") || c.req.header("X-Download-Token") || "";
+
+      if (token) {
+        const decoded = verifyDownloadToken(token);
+        if (!decoded || decoded.skillId !== skill.id || decoded.cid !== skill.zipCid) {
+          return c.json(
+            { success: false, error: "Invalid or expired download token" },
+            401
+          );
+        }
+      } else {
+        const user = c.get("user");
+        if (!user?.userId) {
+          return c.json(
+            {
+              success: false,
+              error: "Authentication required for paid downloads",
+            },
+            401
+          );
+        }
+        const alreadyPurchased = await PaymentService.isAlreadyPurchased(
+          user.userId,
+          skill.id
+        );
+        if (!alreadyPurchased) {
+          return c.json(
+            {
+              success: false,
+              error: "Payment required before content download",
+            },
+            402
+          );
+        }
       }
     }
 
-    const pieceCid = skill.pieceCid || skill.zipCid;
-    if (!pieceCid) {
+    if (!skill.zipCid) {
       return c.json({ success: false, error: "Skill content CID missing" }, 500);
     }
 
-    const data = await FilecoinStorageService.downloadPiece(pieceCid);
-    const filename = `${skill.slug || skill.name}.md`;
+    const data = await FilecoinStorageService.downloadStoredFile({
+      zipCid: skill.zipCid,
+      pieceCid: skill.pieceCid,
+      storageType: skill.storageType,
+    });
+    const isZip =
+      data.length >= 4 &&
+      data[0] === 0x50 &&
+      data[1] === 0x4b &&
+      data[2] === 0x03 &&
+      data[3] === 0x04;
+    const filename = `${skill.slug || skill.name}.${isZip ? "zip" : "md"}`;
 
-    c.header("Content-Type", "text/markdown; charset=utf-8");
+    c.header(
+      "Content-Type",
+      isZip ? "application/zip" : "text/markdown; charset=utf-8"
+    );
     c.header("Content-Disposition", `attachment; filename=\"${filename}\"`);
-    c.header("Cache-Control", "public, max-age=300");
+    c.header("Cache-Control", "private, max-age=300");
     return c.body(Buffer.from(data));
   } catch (error: any) {
     console.error("[Content] Error:", error);
-    return c.json({ success: false, error: error.message || "Failed to fetch skill content" }, 500);
+    return c.json(
+      {
+        success: false,
+        error: error.message || "Failed to fetch skill content",
+      },
+      500
+    );
   }
 });
 

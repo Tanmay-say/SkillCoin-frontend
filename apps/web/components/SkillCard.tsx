@@ -12,13 +12,10 @@ export default function SkillCard({ skill }: { skill: Skill }) {
   const handleCopy = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    navigator.clipboard.writeText(`npx skillcoin install ${skill.name}`);
+    navigator.clipboard.writeText(`npx skillcoin install ${skill.slug}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
-  const truncateAddress = (addr: string) =>
-    `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
 
   const categoryColors: Record<string, string> = {
     coding: "bg-blue-500/15 text-blue-400 border-blue-500/20",

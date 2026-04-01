@@ -1,7 +1,11 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
-import { fetchSkill, requestDownload } from "../lib/api";
+import {
+  fetchSkill,
+  requestDownload,
+  verifyDownloadPayment,
+} from "../lib/api";
 import { downloadFromCID, downloadFromUrl, saveSkill, isSkillInstalled } from "../lib/download";
 import { handleBrowserPayment } from "../lib/payment";
 
@@ -72,7 +76,7 @@ export function installCommand(program: Command) {
         )
       );
       console.log(
-        chalk.dim(`  Storage: ${chalk.green("filecoin")}`)
+        chalk.dim(`  Storage: ${chalk.green(skill.storageType || "filecoin")}`)
       );
       if (skill.zipCid) {
         console.log(
@@ -81,6 +85,8 @@ export function installCommand(program: Command) {
       }
       console.log();
 
+      let readyDownload: Awaited<ReturnType<typeof requestDownload>>["data"];
+
       // Step 2: Handle payment if required
       if (!isFree && options.payment !== false) {
         console.log(
@@ -88,42 +94,57 @@ export function installCommand(program: Command) {
         );
         console.log();
 
-        const { requestDownload } = await import("../lib/api");
-        let recipient = process.env.ADMIN_VAULT_ADDRESS || "";
+        let downloadRequest;
 
-        if (!recipient) {
-          try {
-            const dlResult = await requestDownload(name);
-            if (dlResult.status === 402 && dlResult.challenge?.recipient) {
-              recipient = dlResult.challenge.recipient;
-            }
-          } catch {
-            // Fall through — payment page will show error if no recipient
-          }
-        }
-
-        if (!recipient) {
-          console.log(chalk.red("  Could not determine payment recipient from API."));
-          console.log(chalk.dim("  Set ADMIN_VAULT_ADDRESS env var or contact the marketplace operator."));
+        try {
+          downloadRequest = await requestDownload(name);
+        } catch (error: any) {
+          console.log(chalk.red(`  ✗ Could not initialize payment: ${error.message}`));
           console.log();
           return;
         }
 
         try {
-          const txHash = await handleBrowserPayment({
-            skillName: name,
-            skillId: skill.id,
-            price: price,
-            recipient,
-            currency: skill.priceCurrency || "USDC",
-          });
+          if (downloadRequest.status === 200 && downloadRequest.data) {
+            readyDownload = downloadRequest.data;
+            console.log(chalk.green("  ✓ Purchase already exists for this wallet"));
+            console.log();
+          } else if (downloadRequest.status === 402 && downloadRequest.challenge) {
+            const challenge = downloadRequest.challenge;
+            if (challenge.paymentType === "erc20" && !challenge.tokenAddress) {
+              throw new Error(
+                "The marketplace does not have a USDC token contract configured for this chain."
+              );
+            }
+            const txHash = await handleBrowserPayment({
+              skillName: name,
+              skillId: skill.id,
+              price: price,
+              recipient: challenge.recipient,
+              currency: skill.priceCurrency || "USDC",
+              chainId: challenge.chainId,
+              rpcUrl: challenge.rpcUrl,
+              paymentType: challenge.paymentType,
+              tokenAddress: challenge.tokenAddress,
+              tokenDecimals: challenge.tokenDecimals,
+              blockExplorerUrl: challenge.blockExplorerUrl,
+            });
 
-          console.log(
-            chalk.green(
-              `  ✓ Payment confirmed: ${chalk.dim(txHash.substring(0, 24))}...`
-            )
-          );
-          console.log();
+            readyDownload = await verifyDownloadPayment(
+              name,
+              txHash,
+              challenge.token
+            );
+
+            console.log(
+              chalk.green(
+                `  ✓ Payment confirmed: ${chalk.dim(txHash.substring(0, 24))}...`
+              )
+            );
+            console.log();
+          } else {
+            throw new Error("Unexpected download challenge response");
+          }
         } catch (error: any) {
           console.log(chalk.red(`  ✗ Payment failed: ${error.message}`));
           console.log();
@@ -132,6 +153,11 @@ export function installCommand(program: Command) {
       } else if (isFree) {
         console.log(chalk.green("  ✓ Free skill — no payment needed"));
         console.log();
+      } else {
+        console.log(chalk.red("  Paid installs cannot skip payment."));
+        console.log(chalk.dim("  Remove --no-payment or install a free skill instead."));
+        console.log();
+        return;
       }
 
       // Step 3: Download from IPFS/Filecoin
@@ -142,11 +168,13 @@ export function installCommand(program: Command) {
 
       let fileBuffer: Buffer;
       try {
-        const dl = await requestDownload(name);
+        const dl = readyDownload ? { status: 200, data: readyDownload } : await requestDownload(name);
         if (dl.status === 200 && dl.data?.downloadUrl) {
           fileBuffer = await downloadFromUrl(dl.data.downloadUrl);
-        } else {
+        } else if (skill.zipCid) {
           fileBuffer = await downloadFromCID(skill.zipCid);
+        } else {
+          throw new Error("Skill content is protected and no download URL was returned");
         }
         dlSpinner.succeed(
           chalk.green(
@@ -168,14 +196,20 @@ export function installCommand(program: Command) {
       }).start();
 
       try {
-        const filename = `${skill.slug || skill.name}.md`;
+        const isZip =
+          fileBuffer.length >= 4 &&
+          fileBuffer[0] === 0x50 &&
+          fileBuffer[1] === 0x4b &&
+          fileBuffer[2] === 0x03 &&
+          fileBuffer[3] === 0x04;
+        const filename = `${skill.slug || skill.name}.${isZip ? "zip" : "md"}`;
         const installPath = saveSkill(
           fileBuffer,
           skill.slug || skill.name,
           filename,
           {
             version: skill.version,
-            cid: skill.zipCid,
+            cid: skill.zipCid || readyDownload?.cid || skill.pieceCid || "",
             description: skill.description,
             category: skill.category || undefined,
           }
@@ -190,8 +224,14 @@ export function installCommand(program: Command) {
           )
         );
         console.log(chalk.dim(`    Path:    ${installPath}`));
-        if (skill.zipCid) {
-          console.log(chalk.dim(`    CID:     ${skill.zipCid}`));
+        if (isZip) {
+          console.log(chalk.dim(`    Package:  extracted ZIP archive`));
+        }
+        if (skill.zipCid || readyDownload?.cid || skill.pieceCid) {
+          const storedCid = skill.zipCid || readyDownload?.cid || skill.pieceCid;
+          console.log(chalk.dim(`    CID:     ${storedCid}`));
+        }
+        if (skill.zipCid && !String(skill.zipCid).startsWith("local_")) {
           console.log(chalk.dim(`    IPFS:    ${chalk.cyan(`https://ipfs.io/ipfs/${skill.zipCid}`)}`));
         }
         if (skill.filecoinDatasetId) {

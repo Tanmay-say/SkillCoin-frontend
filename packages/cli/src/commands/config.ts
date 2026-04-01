@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import chalk from "chalk";
+import { ethers } from "ethers";
 import { readConfig, writeConfig } from "../lib/config";
 import { getSupportedIdes, isProjectBundleMode, isTargetIde } from "../lib/project";
 
@@ -36,7 +37,17 @@ export function configCommand(program: Command) {
       if (hasUpdates) {
         const updates: Record<string, string | number> = {};
         if (options.wallet) updates.wallet = options.wallet;
-        if (options.key) updates.privateKey = options.key;
+        if (options.key) {
+          updates.privateKey = options.key;
+          try {
+            const privateKey = options.key.startsWith("0x") ? options.key : `0x${options.key}`;
+            const wallet = new ethers.Wallet(privateKey);
+            updates.wallet = wallet.address;
+            updates.authToken = "";
+          } catch {
+            // Let the config save proceed; auth flow will surface invalid keys later.
+          }
+        }
         if (apiUrl) updates.apiBase = apiUrl;
         if (options.gateway) updates.ipfsGateway = options.gateway;
         if (options.network) updates.network = options.network;
