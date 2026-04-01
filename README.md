@@ -72,6 +72,16 @@ SkillCoin lives between a prompt library and a package registry. It is for:
 
 ---
 
+## Architecture Overview
+
+The diagram below illustrates the end-to-end SkillCoin use case — from skill authoring and Filecoin storage, all the way through to CLI installation and on-chain verification:
+
+<p align="center">
+  <img src="./docs/claude code structure.jpeg" alt="SkillCoin Architecture & Use Case Diagram" width="100%" />
+</p>
+
+---
+
 ## Repository Layout
 
 ```
