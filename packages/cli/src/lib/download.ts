@@ -8,20 +8,36 @@ const GATEWAYS = [
   "https://cloudflare-ipfs.com/ipfs",
 ];
 
+function normalizeId(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim();
+  if (!normalized || normalized === "null" || normalized === "undefined") {
+    return null;
+  }
+  return normalized;
+}
+
 /**
  * Download a file by CID. Local CIDs (local_*) are fetched from the API server;
  * real IPFS CIDs are fetched through public gateways with fallback.
  */
 export async function downloadFromCID(cid: string): Promise<Buffer> {
-  if (cid.startsWith("local_")) {
-    return downloadFromLocalAPI(cid);
+  const normalizedCid = normalizeId(cid);
+  if (!normalizedCid) {
+    throw new Error("Skill content CID is missing");
+  }
+
+  if (normalizedCid.startsWith("local_")) {
+    return downloadFromLocalAPI(normalizedCid);
   }
 
   let lastError: Error | null = null;
 
   for (const gateway of GATEWAYS) {
     try {
-      const url = `${gateway}/${cid}`;
+      const url = `${gateway}/${normalizedCid}`;
       const response = await fetch(url, {
         signal: AbortSignal.timeout(30_000),
       });
@@ -39,15 +55,20 @@ export async function downloadFromCID(cid: string): Promise<Buffer> {
   }
 
   throw new Error(
-    `Failed to download CID ${cid} from all gateways: ${lastError?.message}`
+    `Failed to download CID ${normalizedCid} from all gateways: ${lastError?.message}`
   );
 }
 
 export async function downloadFromUrl(url: string): Promise<Buffer> {
   const config = readConfig();
-  const finalUrl = /^https?:\/\//i.test(url)
-    ? url
-    : `${config.apiBase?.replace(/\/$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
+  const normalizedUrl = normalizeId(url);
+  if (!normalizedUrl) {
+    throw new Error("Skill download URL is missing");
+  }
+
+  const finalUrl = /^https?:\/\//i.test(normalizedUrl)
+    ? normalizedUrl
+    : `${config.apiBase?.replace(/\/$/, "")}${normalizedUrl.startsWith("/") ? "" : "/"}${normalizedUrl}`;
 
   const response = await fetch(finalUrl, {
     signal: AbortSignal.timeout(120_000),

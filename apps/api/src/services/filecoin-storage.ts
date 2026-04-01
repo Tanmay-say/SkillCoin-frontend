@@ -76,7 +76,7 @@ export interface FilecoinUploadResult extends UploadResult {
 
 export class FilecoinStorageService {
   static isLocalCid(cid: string): boolean {
-    return cid.startsWith("local_");
+    return typeof cid === "string" && cid.startsWith("local_");
   }
 
   static async uploadLocalFile(buffer: Buffer, filename: string): Promise<FilecoinUploadResult> {

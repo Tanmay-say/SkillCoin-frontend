@@ -52,7 +52,11 @@ download.get("/:slug/download", async (c) => {
     );
     if (alreadyPurchased) {
       await SkillService.incrementDownloads(skill.id);
-      const token = generateDownloadToken(skill.id, user.userId, skill.zipCid);
+      const contentId = PaymentService.resolveContentId(skill);
+      if (!contentId) {
+        return c.json({ success: false, error: "Skill content CID missing" }, 500);
+      }
+      const token = generateDownloadToken(skill.id, user.userId, contentId);
       return c.json({
         success: true,
         data: {
@@ -186,7 +190,12 @@ download.post("/:slug/verify-payment", async (c) => {
 
     await SkillService.incrementDownloads(skill.id);
 
-    const token = generateDownloadToken(skill.id, user.userId, skill.zipCid);
+    const contentId = PaymentService.resolveContentId(skill);
+    if (!contentId) {
+      return c.json({ success: false, error: "Skill content CID missing" }, 500);
+    }
+
+    const token = generateDownloadToken(skill.id, user.userId, contentId);
 
     return c.json({
       success: true,
@@ -221,13 +230,15 @@ download.get("/:slug/content", async (c) => {
 
     const isFree =
       Number(skill.priceAmount) === 0 || skill.priceCurrency === "FREE";
+    const contentId = PaymentService.resolveContentId(skill);
+
     if (!isFree) {
       const token =
         c.req.query("token") || c.req.header("X-Download-Token") || "";
 
       if (token) {
         const decoded = verifyDownloadToken(token);
-        if (!decoded || decoded.skillId !== skill.id || decoded.cid !== skill.zipCid) {
+        if (!decoded || decoded.skillId !== skill.id || decoded.cid !== contentId) {
           return c.json(
             { success: false, error: "Invalid or expired download token" },
             401
@@ -260,13 +271,13 @@ download.get("/:slug/content", async (c) => {
       }
     }
 
-    if (!skill.zipCid) {
+    if (!contentId) {
       return c.json({ success: false, error: "Skill content CID missing" }, 500);
     }
 
     const data = await FilecoinStorageService.downloadStoredFile({
-      zipCid: skill.zipCid,
-      pieceCid: skill.pieceCid,
+      zipCid: contentId,
+      pieceCid: PaymentService.normalizeContentId(skill.pieceCid) || contentId,
       storageType: skill.storageType,
     });
     const isZip =

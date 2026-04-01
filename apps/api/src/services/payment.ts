@@ -92,6 +92,24 @@ function getSecret(): string {
 }
 
 export class PaymentService {
+  static normalizeContentId(value: unknown): string | null {
+    if (typeof value !== "string") {
+      return null;
+    }
+    const normalized = value.trim();
+    if (!normalized || normalized === "null" || normalized === "undefined") {
+      return null;
+    }
+    return normalized;
+  }
+
+  static resolveContentId(skill: {
+    zipCid?: string | null;
+    pieceCid?: string | null;
+  }): string | null {
+    return this.normalizeContentId(skill.zipCid) || this.normalizeContentId(skill.pieceCid);
+  }
+
   static getPaymentConfig(currency: string): CurrencyPaymentConfig {
     if (currency === "USDC") {
       return {
@@ -241,13 +259,14 @@ export class PaymentService {
     token?: string
   ) {
     const origin = new URL(reqUrl).origin;
+    const contentId = this.resolveContentId(skill);
     const access: Record<string, any> = {
-      cid: skill.zipCid,
+      cid: contentId,
       downloadUrl: this.buildContentUrl(origin, skill.slug, token),
       storageType: skill.storageType || "filecoin",
     };
 
-    if (skill.pieceCid) access.pieceCid = skill.pieceCid;
+    if (this.normalizeContentId(skill.pieceCid)) access.pieceCid = skill.pieceCid;
     if (skill.filecoinDatasetId) {
       access.filecoinDatasetId = skill.filecoinDatasetId;
       access.proofUrl = `https://pdp.vxb.ai/calibration/dataset/${skill.filecoinDatasetId}`;

@@ -9,6 +9,17 @@ import {
 import { downloadFromCID, downloadFromUrl, saveSkill, isSkillInstalled } from "../lib/download";
 import { handleBrowserPayment } from "../lib/payment";
 
+function normalizeContentId(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim();
+  if (!normalized || normalized === "null" || normalized === "undefined") {
+    return null;
+  }
+  return normalized;
+}
+
 export function installCommand(program: Command) {
   program
     .command("install <name>")
@@ -78,9 +89,10 @@ export function installCommand(program: Command) {
       console.log(
         chalk.dim(`  Storage: ${chalk.green(skill.storageType || "filecoin")}`)
       );
-      if (skill.zipCid) {
+      const visibleCid = normalizeContentId(skill.zipCid) || normalizeContentId(skill.pieceCid);
+      if (visibleCid) {
         console.log(
-          chalk.dim(`  CID:     ${chalk.white(skill.zipCid)}`)
+          chalk.dim(`  CID:     ${chalk.white(visibleCid)}`)
         );
       }
       console.log();
@@ -169,10 +181,16 @@ export function installCommand(program: Command) {
       let fileBuffer: Buffer;
       try {
         const dl = readyDownload ? { status: 200, data: readyDownload } : await requestDownload(name);
-        if (dl.status === 200 && dl.data?.downloadUrl) {
+        const downloadUrl = dl.status === 200 ? dl.data?.downloadUrl : undefined;
+        const fallbackCid =
+          normalizeContentId(dl.status === 200 ? dl.data?.cid : undefined) ||
+          normalizeContentId(skill.zipCid) ||
+          normalizeContentId(skill.pieceCid);
+
+        if (dl.status === 200 && downloadUrl) {
           fileBuffer = await downloadFromUrl(dl.data.downloadUrl);
-        } else if (skill.zipCid) {
-          fileBuffer = await downloadFromCID(skill.zipCid);
+        } else if (fallbackCid) {
+          fileBuffer = await downloadFromCID(fallbackCid);
         } else {
           throw new Error("Skill content is protected and no download URL was returned");
         }
@@ -203,13 +221,18 @@ export function installCommand(program: Command) {
           fileBuffer[2] === 0x03 &&
           fileBuffer[3] === 0x04;
         const filename = `${skill.slug || skill.name}.${isZip ? "zip" : "md"}`;
+        const storedCid =
+          normalizeContentId(skill.zipCid) ||
+          normalizeContentId(readyDownload?.cid) ||
+          normalizeContentId(skill.pieceCid) ||
+          "";
         const installPath = saveSkill(
           fileBuffer,
           skill.slug || skill.name,
           filename,
           {
             version: skill.version,
-            cid: skill.zipCid || readyDownload?.cid || skill.pieceCid || "",
+            cid: storedCid,
             description: skill.description,
             category: skill.category || undefined,
           }
@@ -227,12 +250,11 @@ export function installCommand(program: Command) {
         if (isZip) {
           console.log(chalk.dim(`    Package:  extracted ZIP archive`));
         }
-        if (skill.zipCid || readyDownload?.cid || skill.pieceCid) {
-          const storedCid = skill.zipCid || readyDownload?.cid || skill.pieceCid;
+        if (storedCid) {
           console.log(chalk.dim(`    CID:     ${storedCid}`));
         }
-        if (skill.zipCid && !String(skill.zipCid).startsWith("local_")) {
-          console.log(chalk.dim(`    IPFS:    ${chalk.cyan(`https://ipfs.io/ipfs/${skill.zipCid}`)}`));
+        if (storedCid && !storedCid.startsWith("local_")) {
+          console.log(chalk.dim(`    IPFS:    ${chalk.cyan(`https://ipfs.io/ipfs/${storedCid}`)}`));
         }
         if (skill.filecoinDatasetId) {
           console.log(chalk.dim(`    Proof:   ${chalk.cyan(`https://pdp.vxb.ai/calibration/dataset/${skill.filecoinDatasetId}`)}`));
