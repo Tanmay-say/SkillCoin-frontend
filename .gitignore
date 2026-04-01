@@ -24,9 +24,13 @@ dist/
 .next/
 out/
 build/
+artifacts/
+cache/
 # FE-01: Explicit nested .next patterns
 apps/web/.next/
 apps/**/.next/
+contracts/cache/
+contracts/artifacts/
 
 # IDE
 .vscode/
