@@ -19,6 +19,45 @@ import { FilecoinStorageService } from "./services/filecoin-storage";
 
 const app = new Hono();
 
+const configuredOrigins = (process.env.CORS_ORIGIN || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const defaultOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:3002",
+  "https://skillcoin.vercel.app",
+];
+
+function isAllowedOrigin(origin?: string | null) {
+  if (!origin) {
+    return false;
+  }
+
+  if (configuredOrigins.includes(origin) || defaultOrigins.includes(origin)) {
+    return true;
+  }
+
+  try {
+    const url = new URL(origin);
+    if (url.hostname.endsWith(".vercel.app")) {
+      return true;
+    }
+    if (
+      url.protocol === "http:" &&
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1")
+    ) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
 // ─── Global Middleware ─────────────────────────────────────
 
 app.use("*", logger());
@@ -26,11 +65,12 @@ app.use("*", logger());
 app.use(
   "*",
   cors({
-    origin: process.env.CORS_ORIGIN?.split(",").map((s) => s.trim()) || [
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "http://localhost:3002",
-    ],
+    origin: (origin) => {
+      if (!origin) {
+        return configuredOrigins[0] || defaultOrigins[0];
+      }
+      return isAllowedOrigin(origin) ? origin : "";
+    },
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowHeaders: [
       "Content-Type",

@@ -1,7 +1,11 @@
 import { Hono } from "hono";
 import { ethers } from "ethers";
 import prisma from "../db/client";
-import { generateToken } from "../middleware/auth";
+import {
+  generateAuthNonceToken,
+  generateToken,
+  verifyAuthNonceToken,
+} from "../middleware/auth";
 import { LoginSchema } from "../types";
 
 const auth = new Hono();
@@ -33,12 +37,20 @@ auth.get("/nonce", async (c) => {
   }
 
   const nonce = `Sign this message to log in to Skillcoin.\n\nNonce: ${Date.now()}-${Math.random().toString(36).substring(7)}`;
-  nonceStore.set(address.toLowerCase(), {
+  const normalizedAddress = address.toLowerCase();
+
+  nonceStore.set(normalizedAddress, {
     nonce,
     expiresAt: Date.now() + 5 * 60 * 1000, // 5 min
   });
 
-  return c.json({ success: true, data: { nonce } });
+  return c.json({
+    success: true,
+    data: {
+      nonce,
+      nonceToken: generateAuthNonceToken(normalizedAddress, nonce),
+    },
+  });
 });
 
 /**
@@ -57,21 +69,36 @@ auth.post("/login", async (c) => {
       );
     }
 
-    const { address, signature, nonce } = parsed.data;
+    const { address, signature, nonce, nonceToken } = parsed.data;
+    const normalizedAddress = address.toLowerCase();
 
-    // Verify nonce exists and is not expired
-    const stored = nonceStore.get(address.toLowerCase());
-    if (!stored || stored.nonce !== nonce || stored.expiresAt < Date.now()) {
-      return c.json(
-        { success: false, error: "Invalid or expired nonce" },
-        401
-      );
+    let nonceVerified = false;
+
+    if (nonceToken) {
+      const verifiedNonce = verifyAuthNonceToken(nonceToken);
+      if (
+        verifiedNonce &&
+        verifiedNonce.address === normalizedAddress &&
+        verifiedNonce.nonce === nonce
+      ) {
+        nonceVerified = true;
+      }
+    }
+
+    if (!nonceVerified) {
+      const stored = nonceStore.get(normalizedAddress);
+      if (!stored || stored.nonce !== nonce || stored.expiresAt < Date.now()) {
+        return c.json(
+          { success: false, error: "Invalid or expired nonce" },
+          401
+        );
+      }
     }
 
     // Verify ECDSA signature
     try {
       const recoveredAddress = ethers.verifyMessage(nonce, signature);
-      if (recoveredAddress.toLowerCase() !== address.toLowerCase()) {
+      if (recoveredAddress.toLowerCase() !== normalizedAddress) {
         return c.json(
           { success: false, error: "Signature verification failed" },
           401
@@ -85,12 +112,12 @@ auth.post("/login", async (c) => {
     }
 
     // Clean up nonce (single-use)
-    nonceStore.delete(address.toLowerCase());
+    nonceStore.delete(normalizedAddress);
 
     // Upsert user
     const user = await prisma.user.upsert({
-      where: { walletAddress: address.toLowerCase() },
-      create: { walletAddress: address.toLowerCase() },
+      where: { walletAddress: normalizedAddress },
+      create: { walletAddress: normalizedAddress },
       update: {},
     });
 

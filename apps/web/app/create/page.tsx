@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { loginWithWallet, requestAuthNonce, uploadSkill } from "@/lib/api";
+import { API_BASE, loginWithWallet, requestAuthNonce, uploadSkill } from "@/lib/api";
 import FilecoinProofBadge from "@/components/FilecoinProofBadge";
 import {
   Upload, CheckCircle, Loader2, AlertCircle,
@@ -11,6 +11,22 @@ import {
 } from "lucide-react";
 
 type Step = "form" | "uploading" | "success" | "error";
+
+function formatApiError(error: any, fallbackAction: string): string {
+  const respData = error?.response?.data;
+  if (respData?.details?.fieldErrors) {
+    return Object.entries(respData.details.fieldErrors)
+      .map(([field, errs]) => `${field}: ${(errs as string[]).join(", ")}`)
+      .join("\n");
+  }
+  if (respData?.error) {
+    return respData.error;
+  }
+  if (error?.message === "Network Error" || error?.message === "Failed to fetch") {
+    return `Network request failed while contacting ${API_BASE}.\nCheck NEXT_PUBLIC_API_URL and API CORS settings.`;
+  }
+  return error?.message || `${fallbackAction} failed.`;
+}
 
 export default function CreatePage() {
   const [step, setStep] = useState<Step>("form");
@@ -120,18 +136,7 @@ export default function CreatePage() {
       });
       setStep("success");
     } catch (error: any) {
-      const respData = error?.response?.data;
-      let msg = "";
-      if (respData?.details?.fieldErrors) {
-        msg = Object.entries(respData.details.fieldErrors)
-          .map(([f, errs]) => `${f}: ${(errs as string[]).join(", ")}`)
-          .join("\n");
-      } else if (respData?.error) {
-        msg = respData.error;
-      } else {
-        msg = error?.message || "Upload failed. Check the API is running on localhost:3001.";
-      }
-      setErrorMsg(msg);
+      setErrorMsg(formatApiError(error, "Upload"));
       setStep("error");
     }
   };
@@ -143,8 +148,7 @@ export default function CreatePage() {
     setAiError("");
     setAiPreview("");
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-      const res = await fetch(`${apiUrl}/api/skills/generate`, {
+      const res = await fetch(`${API_BASE}/api/skills/generate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -157,7 +161,7 @@ export default function CreatePage() {
       setAiPreview(data.data.skillMd);
       setAiName(data.data.name);
     } catch (err: any) {
-      setAiError(err.message);
+      setAiError(formatApiError(err, "Generation"));
     } finally {
       setAiGenerating(false);
     }
@@ -195,12 +199,17 @@ export default function CreatePage() {
         throw new Error("No wallet address returned");
       }
 
-      const nonce = await requestAuthNonce(address);
+      const nonceData = await requestAuthNonce(address);
       const signature = await eth.request({
         method: "personal_sign",
-        params: [nonce, address],
+        params: [nonceData.nonce, address],
       });
-      const session = await loginWithWallet(address, signature, nonce);
+      const session = await loginWithWallet(
+        address,
+        signature,
+        nonceData.nonce,
+        nonceData.nonceToken
+      );
 
       window.localStorage.setItem("skillcoin.authToken", session.token);
       window.localStorage.setItem("skillcoin.walletAddress", session.user.walletAddress);
@@ -211,7 +220,7 @@ export default function CreatePage() {
         creatorAddress: session.user.walletAddress,
       }));
     } catch (error: any) {
-      setErrorMsg(error?.message || "Wallet authentication failed");
+      setErrorMsg(formatApiError(error, "Wallet authentication"));
       setStep("error");
     } finally {
       setAuthLoading(false);
@@ -588,12 +597,12 @@ export default function CreatePage() {
           {step === "error" && (
             <div className="glass rounded-2xl p-12 text-center">
               <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-6" />
-              <h3 className="text-2xl font-bold mb-4">Upload Failed</h3>
+              <h3 className="text-2xl font-bold mb-4">Request Failed</h3>
               <div className="glass rounded-xl p-4 text-left max-w-md mx-auto mb-6">
                 <pre className="text-sm text-red-400 whitespace-pre-wrap font-mono">{errorMsg}</pre>
               </div>
               <p className="text-xs text-text-muted mb-6">
-                Make sure the API server is running on localhost:3001
+                Check the deployed API URL, wallet session, and CORS configuration.
               </p>
               <button
                 onClick={() => setStep("form")}

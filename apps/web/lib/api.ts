@@ -1,6 +1,6 @@
 import axios, { type AxiosError } from "axios";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 // Warn in dev if using fallback
 if (typeof window !== "undefined" && !process.env.NEXT_PUBLIC_API_URL) {
@@ -102,20 +102,24 @@ export async function uploadSkill(formData: FormData, authToken?: string): Promi
   return data.data;
 }
 
-export async function requestAuthNonce(address: string): Promise<string> {
+export async function requestAuthNonce(
+  address: string
+): Promise<{ nonce: string; nonceToken?: string }> {
   const { data } = await api.get("/api/auth/nonce", { params: { address } });
-  return data.data.nonce;
+  return data.data;
 }
 
 export async function loginWithWallet(
   address: string,
   signature: string,
-  nonce: string
+  nonce: string,
+  nonceToken?: string
 ): Promise<{ token: string; user: { walletAddress: string } }> {
   const { data } = await api.post("/api/auth/login", {
     address,
     signature,
     nonce,
+    nonceToken,
   });
   return data.data;
 }

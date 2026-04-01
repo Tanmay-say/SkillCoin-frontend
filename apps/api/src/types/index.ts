@@ -60,6 +60,7 @@ export const LoginSchema = z.object({
   address: z.string(),
   signature: z.string(),
   nonce: z.string(),
+  nonceToken: z.string().min(1).optional(),
 });
 
 // ─── Payment Schemas ───────────────────────────────────────

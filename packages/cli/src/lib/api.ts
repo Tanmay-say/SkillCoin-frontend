@@ -69,6 +69,7 @@ async function getOrCreateAuthToken(required = false, forceRefresh = false): Pro
       address,
       signature,
       nonce: nonceJson.data.nonce,
+      nonceToken: nonceJson.data.nonceToken,
     }),
   });
   const loginJson = await readJson(loginRes);

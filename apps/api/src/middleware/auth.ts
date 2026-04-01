@@ -20,6 +20,14 @@ export interface AuthUser {
   address: string;
 }
 
+export interface AuthNonceTokenPayload {
+  address: string;
+  nonce: string;
+  purpose: "auth_nonce";
+  iat?: number;
+  exp?: number;
+}
+
 /**
  * Auth middleware - verifies JWT and attaches user to context.
  * Returns 401 if token is missing or invalid.
@@ -78,6 +86,24 @@ export function optionalAuth() {
 export function generateToken(userId: string, address: string): string {
   const opts: SignOptions = { expiresIn: getExpiry() as any };
   return jwt.sign({ userId, address }, getSecret(), opts);
+}
+
+export function generateAuthNonceToken(address: string, nonce: string): string {
+  const opts: SignOptions = { expiresIn: "5m" };
+  return jwt.sign(
+    { address: address.toLowerCase(), nonce, purpose: "auth_nonce" },
+    getSecret(),
+    opts
+  );
+}
+
+export function verifyAuthNonceToken(token: string): AuthNonceTokenPayload | null {
+  try {
+    const decoded = jwt.verify(token, getSecret()) as AuthNonceTokenPayload;
+    return decoded.purpose === "auth_nonce" ? decoded : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
